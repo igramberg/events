@@ -4,6 +4,14 @@ This document tracks the program-level work for the `events` app.
 
 Each task should have its own design discussion, written implementation plan, test plan, and exit review before the next task starts.
 
+## Delivery Constraints
+
+| Constraint | Decision |
+| --- | --- |
+| Commit size | Keep each task's commits at 500 LOC max |
+| Task discipline | Prefer multiple small commits over one large task dump |
+| Deferred domain work | If a concept is needed later but not required now, document it and defer implementation |
+
 ## Task Summary
 
 | Task | Title | Status | Depends On |
@@ -51,7 +59,7 @@ Each task should be worked in this format:
 | Objective | Define the normalized event model and codify V0 inclusion rules |
 | Scope | Domain types, category definitions, date/window rules, inclusion/exclusion criteria |
 | Design Questions | Required event fields, category enum design, how to represent city and venue, how strict V0 inclusion rules should be |
-| Implementation Plan | Write task design notes, add failing tests for event model and inclusion logic, implement minimal domain layer |
+| Implementation Plan | See [t2-domain-model.md](./t2-domain-model.md), then add failing tests for event model and inclusion logic, then implement the minimal domain layer |
 | Test Plan | Model validation tests, category tests, current-week window tests, inclusion rule tests |
 | Exit Criteria | Domain model is stable enough for source and storage tasks to build on |
 
