@@ -1,0 +1,44 @@
+# events
+
+Local web app for assembling a weekly list of greater Boston events from official venue and organization sources.
+
+## Scope
+
+The product focus is a single weekly view of upcoming events in the greater Boston area.
+
+V0 includes:
+
+- concerts and live music
+- theater and performing arts
+- manual refresh
+- current-week storage only
+
+Deferred phases include:
+
+- exhibitions
+- museum special-night events
+- film screenings
+- automated scheduled refresh
+
+## Architecture
+
+- Backend: FastAPI
+- Storage: SQLite
+- Rendering: server-side HTML templates
+- Source strategy: official sources first, generic structured-data parsing before venue-specific fallbacks
+
+See [docs/architecture.md](docs/architecture.md) for the program-level design.
+
+## Development
+
+Task execution is intentionally phased:
+
+1. Repo bootstrap and architecture
+2. Core event model and inclusion rules
+3. Source adapter framework and generic parser
+4. Storage for current-week events
+5. Web UI shell
+6. Initial source pack for music and theater
+7. Manual refresh
+8. Scheduler
+
