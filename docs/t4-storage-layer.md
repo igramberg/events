@@ -37,7 +37,7 @@ Deliverables for T4 should make it possible for T7 (manual refresh) to update st
 | --- | --- |
 | Storage domain | Maps canonical `Event` objects to SQLite rows | Tables are row-level projections of domain fields, not raw source documents |
 | Repository contract | Provides `upsert_events`, `get_events_for_window`, and `prune_stale_events` | Web/orchestration depends on the interface instead of SQL strings |
-| Time handling | Always store UTC timestamps (ISO format) for `starts_at` and `last_seen_at` | Repository converts `WeekWindow` start/end (local) via `utc_bounds_for_window(window)` → `(start_utc, end_utc)` in canonical `YYYY-MM-DDTHH:MM:SSZ` and filters on `starts_at` in SQL (uses index); converts back to local only for display |
+| Time handling | Always store UTC timestamps (ISO format) for `starts_at` and `last_seen_at` | Repository converts `WeekWindow` start/end (local) via `utc_bounds_for_window(window)` → `(start_utc, end_utc)` in canonical `YYYY-MM-DDTHH:MM:SSZ`, start inclusive/end exclusive, DST-safe from `America/New_York`, and filters on `starts_at` in SQL (uses index); converts back to local only for display |
 | Schema ownership | Storage package owns schema migrations and SQLAlchemy metadata | Application wiring relies on repository factories, not inline `CREATE TABLE` statements |
 
 ### Key Tradeoffs
@@ -118,10 +118,10 @@ class StorageRepository(Protocol):
         ...
 ```
 
-- `refresh_timestamp` is the refresh start time supplied by the orchestrator; it must be timezone-aware UTC `datetime`. The repository always serializes it via `strftime('%Y-%m-%dT%H:%M:%S.%fZ')` (fixed-width microseconds); stored strings must match exactly. Inputs must be UTC; naive datetimes are rejected. `upsert_events` and `prune_stale_events` must receive the same value, even if the refresh spans midnight. (Optional) `refresh_id` may be supplied for stricter ordering if concurrent refreshes are ever allowed.
+- `refresh_timestamp` is the refresh start time supplied by the orchestrator; it must be a timezone-aware UTC `datetime` (naive or non-UTC values are rejected). The repository always serializes it via `strftime('%Y-%m-%dT%H:%M:%S.%fZ')` (fixed-width microseconds); stored strings must match exactly. `upsert_events` and `prune_stale_events` must receive the same value, even if the refresh spans midnight. (Optional) `refresh_id` may be supplied for stricter ordering if concurrent refreshes are ever allowed.
 - `upsert_events` writes each event row inside a single transaction per call, performs `ON CONFLICT DO UPDATE` (identity material must match existing row; mismatch raises, rolls back the batch, and leaves existing rows unchanged), and sets `last_seen_at = refresh_timestamp`.
 - `get_events_for_window` reads rows whose `starts_at` falls inside `window` by filtering in SQL on UTC string bounds and returns results sorted by `starts_at` ascending, then `venue_name`, then `event_key`.
-- `prune_stale_events` deletes rows whose `last_seen_at < refresh_timestamp` (meaning they were missing in the current refresh) *or* whose `starts_at` is outside `window` after converting `WeekWindow` bounds to UTC strings and comparing in SQL; start is inclusive, end is exclusive, so equality on the upper bound prunes. If any upsert raises (e.g., identity mismatch), the refresh is considered failed/partial and `prune_stale_events` must be skipped.
+- `prune_stale_events` deletes rows whose `last_seen_at < refresh_timestamp` (meaning they were missing in the current refresh) *or* whose `starts_at` is outside `window` using `utc_bounds_for_window(window)` (start inclusive, end exclusive) and comparing in SQL. If any upsert raises (e.g., identity mismatch), the refresh is considered failed/partial and `prune_stale_events` must be skipped.
 
 The concrete repository will use SQLAlchemy Core metadata plus `text` serialization helpers for JSON columns.
 
