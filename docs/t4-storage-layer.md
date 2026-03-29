@@ -37,7 +37,7 @@ Deliverables for T4 should make it possible for T7 (manual refresh) to update st
 | --- | --- |
 | Storage domain | Maps canonical `Event` objects to SQLite rows | Tables are row-level projections of domain fields, not raw source documents |
 | Repository contract | Provides `upsert_events`, `get_events_for_window`, and `prune_stale_events` | Web/orchestration depends on the interface instead of SQL strings |
-| Time handling | Always store UTC timestamps (ISO format) for `starts_at` and `last_seen_at` | Convert `WeekWindow` start/end (local) to UTC strings and filter on `starts_at` in SQL (uses index); convert back to local only for display |
+| Time handling | Always store UTC timestamps (ISO format) for `starts_at` and `last_seen_at` | Convert `WeekWindow` start/end (local) to UTC strings in the same canonical format as `starts_at` (`YYYY-MM-DDTHH:MM:SSZ`) and filter on `starts_at` in SQL (uses index); convert back to local only for display |
 | Schema ownership | Storage package owns schema migrations and SQLAlchemy metadata | Application wiring relies on repository factories, not inline `CREATE TABLE` statements |
 
 ### Key Tradeoffs
@@ -77,7 +77,7 @@ Table `current_week_events` (name chosen to make scope explicit).
 | `country_code` | `TEXT` | NOT NULL | Display country code. |
 | `organizer_key` | `TEXT` | NULLABLE | Optional organizer identity (must be null when `organizer_name` is null, and vice versa). |
 | `organizer_name` | `TEXT` | NULLABLE | Display organizer label (must be null when `organizer_key` is null). |
-| `starts_at` | `TEXT` | NOT NULL | ISO 8601 UTC timestamp (`YYYY-MM-DDTHH:MM:SSZ`, same as `format_starts_at_utc`; second precision aligns with domain identity rules); we never store naive datetimes. |
+| `starts_at` | `TEXT` | NOT NULL | ISO 8601 UTC timestamp, required fixed-width `YYYY-MM-DDTHH:MM:SSZ` (same as `format_starts_at_utc`; second precision aligns with domain identity rules); we never store naive datetimes. |
 | `source_url` | `TEXT` | NOT NULL | Provenance URL. |
 | `source_name` | `TEXT` | NOT NULL | Source slug. |
 | `source_event_id` | `TEXT` | NULLABLE | Optional source-native ID. |
@@ -118,7 +118,7 @@ class StorageRepository(Protocol):
         ...
 ```
 
-- `refresh_timestamp` is the refresh start time supplied by the orchestrator; it must be timezone-aware UTC datetime. The repository serializes it to fixed-width `YYYY-MM-DDTHH:MM:SS.ssssssZ`; inputs must be canonical, and non-UTC or naive values are rejected. `upsert_events` and `prune_stale_events` must receive the same value, even if the refresh spans midnight. Implementations may accept an optional unique `refresh_id` to guarantee ordering if two refreshes start within the same microsecond.
+- `refresh_timestamp` is the refresh start time supplied by the orchestrator; it must be timezone-aware UTC `datetime`. The repository serializes it to fixed-width `YYYY-MM-DDTHH:MM:SS.ssssssZ`; inputs must be UTC and naive datetimes are rejected. Non-canonical fractional widths are also rejected. `upsert_events` and `prune_stale_events` must receive the same value, even if the refresh spans midnight. (Optional) `refresh_id` may be supplied for stricter ordering if concurrent refreshes are ever allowed.
 - `upsert_events` writes each event row inside a single transaction per call, performs `ON CONFLICT DO UPDATE` (identity material must match existing row; mismatch raises, rolls back the batch, and leaves existing rows unchanged), and sets `last_seen_at = refresh_timestamp`.
 - `get_events_for_window` reads rows whose `starts_at` falls inside `window` by filtering in SQL on UTC string bounds and returns results sorted by `starts_at` ascending, then `venue_name`, then `event_key`.
 - `prune_stale_events` deletes rows whose `last_seen_at < refresh_timestamp` (meaning they were missing in the current refresh) *or* whose `starts_at` is outside `window` after converting `WeekWindow` bounds to UTC strings and comparing in SQL; start is inclusive, end is exclusive, so equality on the upper bound prunes. If any upsert raises (e.g., identity mismatch), the refresh is considered failed/partial and `prune_stale_events` must be skipped.
@@ -135,7 +135,7 @@ Manual refresh orchestration will:
 Keeping a single `refresh_started_at` timestamp ensures `last_seen_at` comparisons are stable even if a refresh spans midnight or a DST transition.
 
 ### Transaction and Consistency Expectations
-- V0 can run `upsert_events` and `prune_stale_events` in separate transactions; no cross-call transaction requirement. Mid-refresh readers may briefly see a superset (pre-prune) set; acceptable for V0.
+- V0 can run `upsert_events` and `prune_stale_events` in separate transactions; no cross-call transaction requirement. If a refresh crashes after `upsert_events` commits but before prune, readers may briefly see a pre-prune superset until the next successful refresh; acceptable for V0.
 - A future improvement may wrap a refresh in one transaction to avoid mixed-state reads; optional, not required for V0 manual refresh. Callers that need stronger consistency can wrap both calls in one transaction.
 
 ### Migration and Configuration
