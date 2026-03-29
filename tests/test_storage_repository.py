@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import create_engine
+from sqlalchemy import select
 
 from events.domain import WeekWindow
 from events.domain import week_window_for
@@ -165,6 +166,18 @@ def test_rejects_naive_refresh_timestamp():
         repo.upsert_events([event], datetime(2026, 3, 29, 12, 0))
 
 
+def test_rejects_non_utc_refresh_timestamp():
+    repo = make_repo()
+    event = make_event(
+        event_key="event:v1:roadrunner:occ:1",
+        occurrence_id="1",
+        title="One",
+        starts_at=datetime(2026, 3, 30, 1, 0, tzinfo=ZoneInfo("UTC")),
+    )
+    with pytest.raises(ValueError):
+        repo.upsert_events([event], datetime(2026, 3, 29, 8, 0, tzinfo=LOCAL_TZ))
+
+
 def test_utc_bounds_helper_matches_expected_format():
     window = WeekWindow(
         start=datetime(2026, 3, 30, 0, 0, tzinfo=LOCAL_TZ),
@@ -180,48 +193,62 @@ def test_utc_bounds_helper_matches_expected_format():
 def test_identity_mismatch_raises_and_rolls_back_batch():
     repo = make_repo()
     refresh_ts = datetime(2026, 3, 29, 12, 0, tzinfo=ZoneInfo("UTC"))
-    good = make_event(
+    window = week_window_for(datetime(2026, 3, 30, tzinfo=ZoneInfo("UTC")))
+    incoming = make_event(
         event_key="event:v1:roadrunner:occ:1",
         occurrence_id="1",
         title="One",
         starts_at=datetime(2026, 3, 30, 1, 0, tzinfo=ZoneInfo("UTC")),
     )
+    other = make_event(
+        event_key="event:v1:roadrunner:occ:2",
+        occurrence_id="2",
+        title="Two",
+        starts_at=datetime(2026, 3, 30, 2, 0, tzinfo=ZoneInfo("UTC")),
+    )
 
-    repo.upsert_events([good], refresh_ts)
-
-    # Seed conflicting identity directly in the table
+    # Seed a corrupted existing row directly in the table (identity_inputs does
+    # not match event_key), then ensure upsert_events() raises and rolls back
+    # the entire batch.
     with repo.engine.begin() as conn:
         conn.execute(
             insert(current_week_events).values(
-                event_key="event:v1:roadrunner:occ:1",
+                event_key=incoming.event_key,
                 identity_kind="occurrence_id",
-                identity_inputs='{"source_name":"roadrunner","occurrence_id":"DIFFERENT"}',
+                identity_inputs='{"occurrence_id":"DIFFERENT","source_name":"roadrunner"}',
                 title="Corrupt",
                 category="concert",
-                venue_key=good.venue.venue_key,
-                venue_name=good.venue.venue_name,
-                location_key=good.venue.location.location_key,
-                city=good.venue.location.city,
-                region=good.venue.location.region,
-                country_code=good.venue.location.country_code,
-                organizer_key=None,
-                organizer_name=None,
-                starts_at="2026-03-31T01:00:00Z",
-                source_url=good.source_url,
-                source_name=good.source_name,
+                venue_key=incoming.venue.venue_key,
+                venue_name=incoming.venue.venue_name,
+                location_key=incoming.venue.location.location_key,
+                city=incoming.venue.location.city,
+                region=incoming.venue.location.region,
+                country_code=incoming.venue.location.country_code,
+                organizer_key=incoming.organizer.organizer_key if incoming.organizer else None,
+                organizer_name=incoming.organizer.name if incoming.organizer else None,
+                starts_at="2026-03-31T01:00:00Z",  # keep corrupted row out of window queries
+                source_url=incoming.source_url,
+                source_name=incoming.source_name,
                 source_event_id="DIFFERENT",
-                description=good.description,
+                description=incoming.description,
                 performers=["Band"],
                 tags=["rock"],
                 last_seen_at="2026-03-29T12:00:00.000000Z",
-            ),
+            )
         )
 
     with pytest.raises(ValueError):
-        repo.upsert_events([good], refresh_ts)
+        repo.upsert_events([other, incoming], refresh_ts)
 
-    events = repo.get_events_for_window(week_window_for(datetime(2026, 3, 30, tzinfo=ZoneInfo("UTC"))))
-    assert [e.title for e in events] == ["One"]
+    events = repo.get_events_for_window(window)
+    assert events == []
+    with repo.engine.begin() as conn:
+        stored = conn.execute(
+            select(current_week_events.c.identity_inputs).where(
+                current_week_events.c.event_key == incoming.event_key,
+            ),
+        ).scalar_one()
+    assert stored == '{"occurrence_id":"DIFFERENT","source_name":"roadrunner"}'
 
 
 def test_window_end_is_exclusive():
