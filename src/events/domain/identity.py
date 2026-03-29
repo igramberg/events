@@ -1,19 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass
-from datetime import UTC
-from datetime import datetime
-from enum import StrEnum
-from hashlib import sha256
 import json
 import re
-from string import ascii_letters
-from string import digits
+from collections.abc import Mapping
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from enum import StrEnum
+from hashlib import sha256
+from string import ascii_letters, digits
 from types import MappingProxyType
 from unicodedata import normalize
 from urllib.parse import quote
-
 
 SOURCE_NAME_RE = re.compile(r"^[a-z0-9_-]+$")
 UNRESERVED = ascii_letters + digits + "-._~"
@@ -33,7 +30,11 @@ class EventIdentity:
     identity_inputs: Mapping[str, str]
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "identity_inputs", MappingProxyType(dict(self.identity_inputs)))
+        object.__setattr__(
+            self,
+            "identity_inputs",
+            MappingProxyType(dict(self.identity_inputs)),
+        )
 
 
 def normalize_component_text(value: str) -> str:
@@ -61,8 +62,12 @@ def encode_starts_at_component(starts_at_utc: str) -> str:
 def format_starts_at_utc(starts_at: datetime) -> str:
     if starts_at.tzinfo is None or starts_at.utcoffset() is None:
         raise ValueError("starts_at must be timezone-aware")
-    return starts_at.astimezone(UTC).replace(microsecond=0).strftime(
-        "%Y-%m-%dT%H:%M:%SZ",
+    return (
+        starts_at.astimezone(UTC)
+        .replace(microsecond=0)
+        .strftime(
+            "%Y-%m-%dT%H:%M:%SZ",
+        )
     )
 
 
@@ -115,8 +120,12 @@ def derive_event_identity(
     _require_source_name(source_name)
     prefix = f"event:v1:{source_name}"
     starts_at_utc = format_starts_at_utc(starts_at)
-    occurrence_id = _require_non_blank_identifier("occurrence_id", occurrence_id)
-    source_event_id = _require_non_blank_identifier("source_event_id", source_event_id)
+    occurrence_id = _require_non_blank_identifier(
+        "occurrence_id", occurrence_id
+    )
+    source_event_id = _require_non_blank_identifier(
+        "source_event_id", source_event_id
+    )
     title = _require_non_blank_text("title", title)
     venue_key = _require_non_blank_text("venue_key", venue_key)
 
@@ -145,7 +154,9 @@ def derive_event_identity(
         )
 
     if not title or not venue_key:
-        raise ValueError("title and venue_key are required for fallback event keys")
+        raise ValueError(
+            "title and venue_key are required for fallback event keys"
+        )
 
     normalized_title = normalize_fallback_title(title)
     payload = _fallback_payload(

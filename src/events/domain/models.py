@@ -6,12 +6,16 @@ from datetime import datetime
 from enum import StrEnum
 from types import MappingProxyType
 
-from events.domain.identity import derive_event_identity
-from events.domain.identity import IdentityKind
-from events.domain.identity import SOURCE_NAME_RE
-from events.domain.keys import make_location_key
-from events.domain.keys import make_organizer_key
-from events.domain.keys import make_venue_key
+from events.domain.identity import (
+    SOURCE_NAME_RE,
+    IdentityKind,
+    derive_event_identity,
+)
+from events.domain.keys import (
+    make_location_key,
+    make_organizer_key,
+    make_venue_key,
+)
 from events.domain.urls import require_absolute_url
 
 
@@ -66,7 +70,9 @@ class Location:
             region=self.region,
             country_code=self.country_code,
         ):
-            raise ValueError("location_key must match canonical location fields")
+            raise ValueError(
+                "location_key must match canonical location fields"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,7 +100,9 @@ class Organizer:
         _require_non_empty("organizer_key", self.organizer_key)
         _require_non_empty("name", self.name)
         if self.organizer_key != make_organizer_key(name=self.name):
-            raise ValueError("organizer_key must match canonical organizer fields")
+            raise ValueError(
+                "organizer_key must match canonical organizer fields"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,18 +137,29 @@ class Event:
         if not SOURCE_NAME_RE.fullmatch(self.source_name):
             raise ValueError("source_name must be a stable internal identifier")
         if frozen_identity_inputs.get("source_name") != self.source_name:
-            raise ValueError("identity_inputs source_name must match source_name")
+            raise ValueError(
+                "identity_inputs source_name must match source_name"
+            )
         required_keys = IDENTITY_KEYS_BY_KIND[self.identity_kind]
         if set(frozen_identity_inputs) != required_keys:
-            raise ValueError("identity_inputs must match identity_kind requirements")
+            raise ValueError(
+                "identity_inputs must match identity_kind requirements"
+            )
         expected_identity = self._derive_expected_identity()
         if expected_identity.event_key != self.event_key:
-            raise ValueError("event_key must match identity_kind and identity_inputs")
-        if dict(expected_identity.identity_inputs) != dict(frozen_identity_inputs):
-            raise ValueError("identity_inputs must match derived identity inputs")
+            raise ValueError(
+                "event_key must match identity_kind and identity_inputs"
+            )
+        if dict(expected_identity.identity_inputs) != dict(
+            frozen_identity_inputs
+        ):
+            raise ValueError(
+                "identity_inputs must match derived identity inputs"
+            )
         if (
             self.identity_kind is IdentityKind.SOURCE_EVENT_ID_STARTS_AT
-            and self.source_event_id != frozen_identity_inputs["source_event_id"]
+            and self.source_event_id
+            != frozen_identity_inputs["source_event_id"]
         ):
             raise ValueError("source_event_id must match identity_inputs")
 

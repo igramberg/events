@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from types import MappingProxyType
 from typing import TYPE_CHECKING
@@ -12,7 +10,6 @@ from typing import TYPE_CHECKING
 from events.domain.identity import SOURCE_NAME_RE
 from events.domain.models import EventCategory
 from events.domain.urls import require_absolute_url
-
 
 if TYPE_CHECKING:
     from zoneinfo import ZoneInfo
@@ -48,7 +45,9 @@ def _freeze_unique_strings(values: Sequence[str]) -> tuple[str, ...]:
         or isinstance(values, Mapping)
         or not isinstance(values, Sequence)
     ):
-        raise ValueError("string collections must be provided as a sequence of strings")
+        raise ValueError(
+            "string collections must be provided as a sequence of strings"
+        )
     frozen: list[str] = []
     seen: set[str] = set()
     for value in values:
@@ -60,13 +59,21 @@ def _freeze_unique_strings(values: Sequence[str]) -> tuple[str, ...]:
     return tuple(frozen)
 
 
-def _freeze_typed_sequence(name: str, values: Sequence[object], expected_type: type[object]) -> tuple[object, ...]:
-    if isinstance(values, str) or isinstance(values, Mapping) or not isinstance(values, Sequence):
+def _freeze_typed_sequence(
+    name: str, values: Sequence[object], expected_type: type[object]
+) -> tuple[object, ...]:
+    if (
+        isinstance(values, str)
+        or isinstance(values, Mapping)
+        or not isinstance(values, Sequence)
+    ):
         raise ValueError(f"{name} must be a sequence")
     frozen = tuple(values)
     for value in frozen:
         if not isinstance(value, expected_type):
-            raise ValueError(f"{name} must contain only {expected_type.__name__} values")
+            raise ValueError(
+                f"{name} must contain only {expected_type.__name__} values"
+            )
     return frozen
 
 
@@ -87,7 +94,9 @@ class SourceRequest:
     headers: Mapping[str, str] | None = None
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "source_name", _require_source_name(self.source_name))
+        object.__setattr__(
+            self, "source_name", _require_source_name(self.source_name)
+        )
         object.__setattr__(
             self,
             "requested_url",
@@ -98,10 +107,14 @@ class SourceRequest:
         if not isinstance(self.headers, Mapping):
             raise ValueError("headers must be a mapping of string pairs")
         normalized_headers = {
-            _require_non_blank("header name", key): _require_non_blank("header value", value)
+            _require_non_blank("header name", key): _require_non_blank(
+                "header value", value
+            )
             for key, value in dict(self.headers).items()
         }
-        object.__setattr__(self, "headers", MappingProxyType(normalized_headers))
+        object.__setattr__(
+            self, "headers", MappingProxyType(normalized_headers)
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,12 +129,16 @@ class SourceDocument:
     fetched_at: datetime
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "source_name", _require_source_name(self.source_name))
+        object.__setattr__(
+            self, "source_name", _require_source_name(self.source_name)
+        )
         if not isinstance(self.status_code, int):
             raise ValueError("status_code must be an int")
         if not isinstance(self.content, str):
             raise ValueError("content must be a string")
-        if self.content_type is not None and not isinstance(self.content_type, str):
+        if self.content_type is not None and not isinstance(
+            self.content_type, str
+        ):
             raise ValueError("content_type must be a string when present")
         if not isinstance(self.fetched_at, datetime):
             raise ValueError("fetched_at must be a datetime")
@@ -135,7 +152,10 @@ class SourceDocument:
             "fetched_url",
             _require_absolute_http_url("fetched_url", self.fetched_url),
         )
-        if self.fetched_at.tzinfo is None or self.fetched_at.utcoffset() is None:
+        if (
+            self.fetched_at.tzinfo is None
+            or self.fetched_at.utcoffset() is None
+        ):
             raise ValueError("fetched_at must be timezone-aware")
         if self.fetched_at.utcoffset() != UTC.utcoffset(self.fetched_at):
             raise ValueError("fetched_at must be UTC")
@@ -143,10 +163,14 @@ class SourceDocument:
             if not isinstance(self.headers, Mapping):
                 raise ValueError("headers must be a mapping of string pairs")
             normalized_headers = {
-                _require_non_blank("header name", key): _require_non_blank("header value", value)
+                _require_non_blank("header name", key): _require_non_blank(
+                    "header value", value
+                )
                 for key, value in dict(self.headers).items()
             }
-            object.__setattr__(self, "headers", MappingProxyType(normalized_headers))
+            object.__setattr__(
+                self, "headers", MappingProxyType(normalized_headers)
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,11 +193,21 @@ class CandidateEventInput:
     tags: Sequence[str] = ()
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "source_name", _require_source_name(self.source_name))
-        object.__setattr__(self, "source_url", _require_absolute_http_url("source_url", self.source_url))
-        if self.starts_at is not None and not isinstance(self.starts_at, datetime):
+        object.__setattr__(
+            self, "source_name", _require_source_name(self.source_name)
+        )
+        object.__setattr__(
+            self,
+            "source_url",
+            _require_absolute_http_url("source_url", self.source_url),
+        )
+        if self.starts_at is not None and not isinstance(
+            self.starts_at, datetime
+        ):
             raise ValueError("starts_at must be a datetime when present")
-        if self.category is not None and not isinstance(self.category, EventCategory):
+        if self.category is not None and not isinstance(
+            self.category, EventCategory
+        ):
             raise ValueError("category must be EventCategory or None")
         if self.starts_at is not None and (
             self.starts_at.tzinfo is None or self.starts_at.utcoffset() is None
@@ -181,7 +215,9 @@ class CandidateEventInput:
             raise ValueError("starts_at must be timezone-aware when present")
 
         if self.title is not None:
-            object.__setattr__(self, "title", _require_non_blank("title", self.title))
+            object.__setattr__(
+                self, "title", _require_non_blank("title", self.title)
+            )
         if self.occurrence_id is not None:
             object.__setattr__(
                 self,
@@ -204,10 +240,16 @@ class CandidateEventInput:
         ):
             value = getattr(self, field_name)
             if value is not None:
-                object.__setattr__(self, field_name, _require_non_blank(field_name, value))
+                object.__setattr__(
+                    self, field_name, _require_non_blank(field_name, value)
+                )
 
-        object.__setattr__(self, "schema_types", _freeze_unique_strings(self.schema_types))
-        object.__setattr__(self, "performers", _freeze_unique_strings(self.performers))
+        object.__setattr__(
+            self, "schema_types", _freeze_unique_strings(self.schema_types)
+        )
+        object.__setattr__(
+            self, "performers", _freeze_unique_strings(self.performers)
+        )
         object.__setattr__(self, "tags", _freeze_unique_strings(self.tags))
 
 
@@ -221,13 +263,19 @@ class ParseIssue:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "code", _require_non_blank("code", self.code))
-        object.__setattr__(self, "message", _require_non_blank("message", self.message))
+        object.__setattr__(
+            self, "message", _require_non_blank("message", self.message)
+        )
         if not isinstance(self.phase, ParsePhase):
             raise ValueError("phase must be ParsePhase")
         if not isinstance(self.severity, ParseSeverity):
             raise ValueError("severity must be ParseSeverity")
         if self.source_ref is not None:
-            object.__setattr__(self, "source_ref", _require_non_blank("source_ref", self.source_ref))
+            object.__setattr__(
+                self,
+                "source_ref",
+                _require_non_blank("source_ref", self.source_ref),
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -239,7 +287,9 @@ class ParseResult:
         object.__setattr__(
             self,
             "candidates",
-            _freeze_typed_sequence("candidates", self.candidates, CandidateEventInput),
+            _freeze_typed_sequence(
+                "candidates", self.candidates, CandidateEventInput
+            ),
         )
         object.__setattr__(
             self,

@@ -1,20 +1,18 @@
 from __future__ import annotations
 
-from datetime import UTC
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from urllib.error import HTTPError
-from urllib.request import Request
-from urllib.request import HTTPRedirectHandler
-from urllib.request import build_opener
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-from events.sources.models import ParseIssue
-from events.sources.models import ParsePhase
-from events.sources.models import ParseResult
-from events.sources.models import ParseSeverity
-from events.sources.models import SourceDocument
-from events.sources.models import SourceRequest
-
+from events.sources.models import (
+    ParseIssue,
+    ParsePhase,
+    ParseResult,
+    ParseSeverity,
+    SourceDocument,
+    SourceRequest,
+)
 
 if TYPE_CHECKING:
     from events.sources.models import SourceAdapter
@@ -85,13 +83,17 @@ def fetch(request: SourceRequest) -> SourceDocument:
     )
     try:
         opener = build_opener(_RedirectHandler)
-        with opener.open(http_request, timeout=FETCH_TIMEOUT_SECONDS) as response:
+        with opener.open(
+            http_request, timeout=FETCH_TIMEOUT_SECONDS
+        ) as response:
             headers = _response_headers(response.headers)
             return SourceDocument(
                 source_name=request.source_name,
                 requested_url=request.requested_url,
                 fetched_url=response.geturl(),
-                content=_decode_response_body(response.read(), response.headers),
+                content=_decode_response_body(
+                    response.read(), response.headers
+                ),
                 content_type=response.headers.get_content_type(),
                 status_code=response.getcode(),
                 headers=headers,
@@ -103,13 +105,19 @@ def fetch(request: SourceRequest) -> SourceDocument:
             raise
         try:
             headers = _response_headers(error.headers)
-            content = _decode_response_body(error.read(), error.headers) if error.fp is not None else ""
+            content = (
+                _decode_response_body(error.read(), error.headers)
+                if error.fp is not None
+                else ""
+            )
             return SourceDocument(
                 source_name=request.source_name,
                 requested_url=request.requested_url,
                 fetched_url=error.geturl(),
                 content=content,
-                content_type=error.headers.get_content_type() if error.headers else None,
+                content_type=error.headers.get_content_type()
+                if error.headers
+                else None,
                 status_code=error.code,
                 headers=headers,
                 fetched_at=datetime.now(tz=UTC),
@@ -133,7 +141,9 @@ def collect(
                     code="invalid_source_request",
                     phase=ParsePhase.FETCH,
                     severity=ParseSeverity.ERROR,
-                    message=_error_message(error, "Failed to build source request"),
+                    message=_error_message(
+                        error, "Failed to build source request"
+                    ),
                 ),
             ),
         )
@@ -142,7 +152,9 @@ def collect(
         if not isinstance(request, SourceRequest):
             raise ValueError("build_request must return SourceRequest")
         if request.source_name != adapter.source_name:
-            raise ValueError("request source_name must match adapter source_name")
+            raise ValueError(
+                "request source_name must match adapter source_name"
+            )
         SourceRequest(
             source_name=request.source_name,
             requested_url=request.requested_url,
@@ -166,7 +178,9 @@ def collect(
         if not isinstance(source_document, SourceDocument):
             raise ValueError("fetcher must return SourceDocument")
         if source_document.source_name != request.source_name:
-            raise ValueError("source_document source_name must match request source_name")
+            raise ValueError(
+                "source_document source_name must match request source_name"
+            )
     except Exception as error:  # noqa: BLE001
         return ParseResult(
             candidates=(),
@@ -200,7 +214,9 @@ def collect(
             raise ValueError("parse must return ParseResult")
         for candidate in parse_result.candidates:
             if candidate.source_name != source_document.source_name:
-                raise ValueError("candidate source_name must match source_document source_name")
+                raise ValueError(
+                    "candidate source_name must match source_document source_name"
+                )
         return parse_result
     except Exception as error:  # noqa: BLE001
         return ParseResult(

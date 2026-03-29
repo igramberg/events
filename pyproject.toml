@@ -18,6 +18,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "pytest>=8.4,<9.0",
+  "ruff>=0.4,<1.0",
 ]
 
 [tool.setuptools]
@@ -28,3 +29,18 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 80
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = [
+  # Formatter-controlled; keep the 80-col target without noisy failures.
+  "E501",
+]
+
+[tool.ruff.format]
+line-ending = "lf"

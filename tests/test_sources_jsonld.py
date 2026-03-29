@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from datetime import UTC
-from datetime import datetime
 import unittest
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 
@@ -66,7 +65,9 @@ class JsonLdExtractorTests(unittest.TestCase):
             datetime(2026, 3, 29, 20, 0, 0, tzinfo=UTC),
             candidate.starts_at,
         )
-        self.assertEqual("https://example.com/shows/example", candidate.source_url)
+        self.assertEqual(
+            "https://example.com/shows/example", candidate.source_url
+        )
         self.assertEqual("Roadrunner", candidate.venue_name)
         self.assertEqual("Boston", candidate.city)
         self.assertEqual("MA", candidate.region)
@@ -165,8 +166,7 @@ class JsonLdExtractorTests(unittest.TestCase):
         self.assertEqual((), result.issues)
 
     def test_emits_invalid_jsonld_and_continues_to_later_scripts(self) -> None:
-        from events.sources import ParsePhase
-        from events.sources import ParseSeverity
+        from events.sources import ParsePhase, ParseSeverity
         from events.sources.jsonld import JsonLdExtractor
 
         document = _source_document(
@@ -197,8 +197,7 @@ class JsonLdExtractorTests(unittest.TestCase):
         )
 
     def test_emits_unsupported_jsonld_shape_for_scalar_payload(self) -> None:
-        from events.sources import ParsePhase
-        from events.sources import ParseSeverity
+        from events.sources import ParsePhase, ParseSeverity
         from events.sources.jsonld import JsonLdExtractor
 
         document = _source_document(
@@ -218,9 +217,10 @@ class JsonLdExtractorTests(unittest.TestCase):
         self.assertEqual(ParsePhase.PARSE, result.issues[0].phase)
         self.assertEqual(ParseSeverity.ERROR, result.issues[0].severity)
 
-    def test_emits_missing_start_date_for_event_like_node_above_threshold(self) -> None:
-        from events.sources import ParsePhase
-        from events.sources import ParseSeverity
+    def test_emits_missing_start_date_for_event_like_node_above_threshold(
+        self,
+    ) -> None:
+        from events.sources import ParsePhase, ParseSeverity
         from events.sources.jsonld import JsonLdExtractor
 
         document = _source_document(
@@ -238,7 +238,9 @@ class JsonLdExtractorTests(unittest.TestCase):
         self.assertIsNone(result.candidates[0].starts_at)
         self.assertEqual(1, len(result.issues))
         self.assertEqual("missing_start_date", result.issues[0].code)
-        self.assertEqual("script[0] name=No Start Yet", result.issues[0].source_ref)
+        self.assertEqual(
+            "script[0] name=No Start Yet", result.issues[0].source_ref
+        )
         self.assertEqual(ParsePhase.PARSE, result.issues[0].phase)
         self.assertEqual(ParseSeverity.WARNING, result.issues[0].severity)
 
@@ -258,7 +260,9 @@ class JsonLdExtractorTests(unittest.TestCase):
         self.assertEqual((), result.candidates)
         self.assertEqual((), result.issues)
 
-    def test_emits_naive_start_date_no_tz_when_default_timezone_is_missing(self) -> None:
+    def test_emits_naive_start_date_no_tz_when_default_timezone_is_missing(
+        self,
+    ) -> None:
         from events.sources.jsonld import JsonLdExtractor
 
         document = _source_document(
@@ -416,7 +420,9 @@ class JsonLdExtractorTests(unittest.TestCase):
         self.assertIsNone(result.candidates[0].starts_at)
         self.assertEqual("nonexistent_local_start_date", result.issues[0].code)
 
-    def test_prefers_usable_at_id_over_bad_url_without_resolution_warning(self) -> None:
+    def test_prefers_usable_at_id_over_bad_url_without_resolution_warning(
+        self,
+    ) -> None:
         from events.sources.jsonld import JsonLdExtractor
 
         document = _source_document(
@@ -466,7 +472,9 @@ class JsonLdExtractorTests(unittest.TestCase):
             result.candidates[0].source_url,
         )
 
-    def test_emits_url_resolution_failed_for_unusable_object_form_url(self) -> None:
+    def test_emits_url_resolution_failed_for_unusable_object_form_url(
+        self,
+    ) -> None:
         from events.sources.jsonld import JsonLdExtractor
 
         document = _source_document(
@@ -492,7 +500,9 @@ class JsonLdExtractorTests(unittest.TestCase):
         self.assertEqual(1, len(result.issues))
         self.assertEqual("url_resolution_failed", result.issues[0].code)
 
-    def test_emits_url_resolution_failed_for_malformed_object_form_url(self) -> None:
+    def test_emits_url_resolution_failed_for_malformed_object_form_url(
+        self,
+    ) -> None:
         from events.sources.jsonld import JsonLdExtractor
 
         document = _source_document(
@@ -518,7 +528,9 @@ class JsonLdExtractorTests(unittest.TestCase):
         self.assertEqual(1, len(result.issues))
         self.assertEqual("url_resolution_failed", result.issues[0].code)
 
-    def test_emits_url_resolution_failed_for_empty_object_form_url(self) -> None:
+    def test_emits_url_resolution_failed_for_empty_object_form_url(
+        self,
+    ) -> None:
         from events.sources.jsonld import JsonLdExtractor
 
         document = _source_document(
@@ -544,9 +556,10 @@ class JsonLdExtractorTests(unittest.TestCase):
         self.assertEqual(1, len(result.issues))
         self.assertEqual("url_resolution_failed", result.issues[0].code)
 
-    def test_emits_url_resolution_failed_when_node_specific_urls_are_unusable(self) -> None:
-        from events.sources import ParsePhase
-        from events.sources import ParseSeverity
+    def test_emits_url_resolution_failed_when_node_specific_urls_are_unusable(
+        self,
+    ) -> None:
+        from events.sources import ParsePhase, ParseSeverity
         from events.sources.jsonld import JsonLdExtractor
 
         document = _source_document(
@@ -575,7 +588,9 @@ class JsonLdExtractorTests(unittest.TestCase):
         self.assertEqual(ParsePhase.PARSE, result.issues[0].phase)
         self.assertEqual(ParseSeverity.WARNING, result.issues[0].severity)
 
-    def test_supports_graph_shape_without_dereferencing_related_nodes(self) -> None:
+    def test_supports_graph_shape_without_dereferencing_related_nodes(
+        self,
+    ) -> None:
         from events.sources.jsonld import JsonLdExtractor
 
         document = _source_document(
@@ -630,7 +645,9 @@ class JsonLdExtractorTests(unittest.TestCase):
         self.assertEqual(1, len(result.candidates))
         self.assertEqual("Object Graph Event", result.candidates[0].title)
 
-    def test_uses_first_usable_values_from_list_shaped_single_fields(self) -> None:
+    def test_uses_first_usable_values_from_list_shaped_single_fields(
+        self,
+    ) -> None:
         from events.sources.jsonld import JsonLdExtractor
 
         document = _source_document(
@@ -666,7 +683,9 @@ class JsonLdExtractorTests(unittest.TestCase):
             datetime(2026, 3, 29, 20, 0, 0, tzinfo=UTC),
             candidate.starts_at,
         )
-        self.assertEqual("https://example.com/events/list-event", candidate.source_url)
+        self.assertEqual(
+            "https://example.com/events/list-event", candidate.source_url
+        )
         self.assertEqual("Roadrunner", candidate.venue_name)
         self.assertEqual("Boston", candidate.city)
         self.assertEqual("MA", candidate.region)
@@ -801,7 +820,9 @@ class JsonLdExtractorTests(unittest.TestCase):
 
         self.assertEqual(1, len(result.issues))
         self.assertEqual("missing_start_date", result.issues[0].code)
-        self.assertEqual("script[0] name=Named From List", result.issues[0].source_ref)
+        self.assertEqual(
+            "script[0] name=Named From List", result.issues[0].source_ref
+        )
 
     def test_source_ref_uses_object_form_at_id(self) -> None:
         from events.sources.jsonld import JsonLdExtractor
@@ -821,9 +842,13 @@ class JsonLdExtractorTests(unittest.TestCase):
 
         self.assertEqual(1, len(result.issues))
         self.assertEqual("missing_start_date", result.issues[0].code)
-        self.assertEqual("script[0] @id=/events/object-id", result.issues[0].source_ref)
+        self.assertEqual(
+            "script[0] @id=/events/object-id", result.issues[0].source_ref
+        )
 
-    def test_uses_first_usable_at_id_from_list_when_url_is_missing(self) -> None:
+    def test_uses_first_usable_at_id_from_list_when_url_is_missing(
+        self,
+    ) -> None:
         from events.sources.jsonld import JsonLdExtractor
 
         document = _source_document(
@@ -848,7 +873,9 @@ class JsonLdExtractorTests(unittest.TestCase):
             result.candidates[0].source_url,
         )
 
-    def test_emits_url_resolution_failed_for_malformed_object_at_id(self) -> None:
+    def test_emits_url_resolution_failed_for_malformed_object_at_id(
+        self,
+    ) -> None:
         from events.sources.jsonld import JsonLdExtractor
 
         document = _source_document(
@@ -900,7 +927,9 @@ class JsonLdExtractorTests(unittest.TestCase):
         self.assertEqual(1, len(result.issues))
         self.assertEqual("url_resolution_failed", result.issues[0].code)
 
-    def test_ignores_fragment_only_at_id_for_url_resolution_failure(self) -> None:
+    def test_ignores_fragment_only_at_id_for_url_resolution_failure(
+        self,
+    ) -> None:
         from events.sources.jsonld import JsonLdExtractor
 
         document = _source_document(
@@ -919,7 +948,9 @@ class JsonLdExtractorTests(unittest.TestCase):
         result = JsonLdExtractor(default_tz=None).parse(document)
 
         self.assertEqual(1, len(result.candidates))
-        self.assertEqual("https://example.com/final/events", result.candidates[0].source_url)
+        self.assertEqual(
+            "https://example.com/final/events", result.candidates[0].source_url
+        )
         self.assertEqual((), result.issues)
 
     def test_ignores_blank_node_at_id_for_url_resolution_failure(self) -> None:
@@ -941,7 +972,9 @@ class JsonLdExtractorTests(unittest.TestCase):
         result = JsonLdExtractor(default_tz=None).parse(document)
 
         self.assertEqual(1, len(result.candidates))
-        self.assertEqual("https://example.com/final/events", result.candidates[0].source_url)
+        self.assertEqual(
+            "https://example.com/final/events", result.candidates[0].source_url
+        )
         self.assertEqual((), result.issues)
 
     def test_skips_event_like_node_with_only_unusable_url_string(self) -> None:
@@ -982,7 +1015,9 @@ class JsonLdExtractorTests(unittest.TestCase):
         self.assertEqual((), result.candidates)
         self.assertEqual((), result.issues)
 
-    def test_skips_event_like_node_with_only_malformed_object_at_id(self) -> None:
+    def test_skips_event_like_node_with_only_malformed_object_at_id(
+        self,
+    ) -> None:
         from events.sources.jsonld import JsonLdExtractor
 
         document = _source_document(
@@ -1021,11 +1056,15 @@ class JsonLdExtractorTests(unittest.TestCase):
 
         self.assertEqual(1, len(result.issues))
         self.assertEqual("missing_start_date", result.issues[0].code)
-        self.assertEqual("script[0] @id=/events/source-ref", result.issues[0].source_ref)
+        self.assertEqual(
+            "script[0] @id=/events/source-ref", result.issues[0].source_ref
+        )
 
     def test_can_emit_non_event_node_skipped_in_debug_mode(self) -> None:
-        from events.sources.jsonld import JsonLdExtractor
-        from events.sources.jsonld import JsonLdExtractorOptions
+        from events.sources.jsonld import (
+            JsonLdExtractor,
+            JsonLdExtractorOptions,
+        )
 
         document = _source_document(
             content="""

@@ -1,28 +1,27 @@
 from __future__ import annotations
 
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy import select
-
-from events.domain import WeekWindow
-from events.domain import week_window_for
-from events.domain.models import Event
-from events.domain.models import EventCategory
-from events.domain.models import IdentityKind
-from events.domain.models import Location
-from events.domain.models import Organizer
-from events.domain.models import Venue
+from sqlalchemy import create_engine, select
 from sqlalchemy.dialects.sqlite import insert
 
-from events.storage.sqlite import SqliteStorageRepository
-from events.storage.sqlite import create_tables
-from events.storage.sqlite import current_week_events
-from events.storage.sqlite import utc_bounds_for_window
-
+from events.domain import WeekWindow, week_window_for
+from events.domain.models import (
+    Event,
+    EventCategory,
+    IdentityKind,
+    Location,
+    Organizer,
+    Venue,
+)
+from events.storage.sqlite import (
+    SqliteStorageRepository,
+    create_tables,
+    current_week_events,
+    utc_bounds_for_window,
+)
 
 LOCAL_TZ = ZoneInfo("America/New_York")
 
@@ -48,12 +47,18 @@ def make_event(
     )
     organizer_obj = None
     if organizer:
-        organizer_obj = Organizer(organizer_key="org:v1:crossroads%20presents", name="Crossroads Presents")
+        organizer_obj = Organizer(
+            organizer_key="org:v1:crossroads%20presents",
+            name="Crossroads Presents",
+        )
 
     return Event(
         event_key=event_key,
         identity_kind=IdentityKind.OCCURRENCE_ID,
-        identity_inputs={"source_name": "roadrunner", "occurrence_id": occurrence_id},
+        identity_inputs={
+            "source_name": "roadrunner",
+            "occurrence_id": occurrence_id,
+        },
         title=title,
         category=EventCategory.CONCERT,
         venue=venue,
@@ -95,7 +100,9 @@ def test_upsert_updates_existing_row():
 
     repo.upsert_events([updated], refresh_ts)
 
-    events = repo.get_events_for_window(week_window_for(datetime(2026, 3, 30, tzinfo=ZoneInfo("UTC"))))
+    events = repo.get_events_for_window(
+        week_window_for(datetime(2026, 3, 30, tzinfo=ZoneInfo("UTC")))
+    )
     assert len(events) == 1
     assert events[0].title == "Updated Title"
     assert events[0].performers == ("Band",)
@@ -175,7 +182,9 @@ def test_rejects_non_utc_refresh_timestamp():
         starts_at=datetime(2026, 3, 30, 1, 0, tzinfo=ZoneInfo("UTC")),
     )
     with pytest.raises(ValueError):
-        repo.upsert_events([event], datetime(2026, 3, 29, 8, 0, tzinfo=LOCAL_TZ))
+        repo.upsert_events(
+            [event], datetime(2026, 3, 29, 8, 0, tzinfo=LOCAL_TZ)
+        )
 
 
 def test_utc_bounds_helper_matches_expected_format():
@@ -226,8 +235,12 @@ def test_identity_mismatch_raises_and_rolls_back_batch():
                 city=incoming.venue.location.city,
                 region=incoming.venue.location.region,
                 country_code=incoming.venue.location.country_code,
-                organizer_key=incoming.organizer.organizer_key if incoming.organizer else None,
-                organizer_name=incoming.organizer.name if incoming.organizer else None,
+                organizer_key=incoming.organizer.organizer_key
+                if incoming.organizer
+                else None,
+                organizer_name=incoming.organizer.name
+                if incoming.organizer
+                else None,
                 # Keep the corrupted row out of the queried WeekWindow so
                 # get_events_for_window() doesn't try to hydrate a domain-invalid row.
                 starts_at="2026-04-07T01:00:00Z",

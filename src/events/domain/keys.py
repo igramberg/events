@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from events.domain.identity import derive_event_identity
-from events.domain.identity import encode_key_component
-from events.domain.identity import format_starts_at_utc
-
+from events.domain.identity import (
+    derive_event_identity,
+    encode_key_component,
+    format_starts_at_utc,
+)
 
 __all__ = [
     "derive_event_identity",

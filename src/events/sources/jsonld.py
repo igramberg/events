@@ -1,23 +1,22 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
-from datetime import UTC
-from datetime import datetime
-from html.parser import HTMLParser
 import json
 import re
-from urllib.parse import urljoin
-from urllib.parse import urlsplit
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from html.parser import HTMLParser
+from urllib.parse import urljoin, urlsplit
 from zoneinfo import ZoneInfo
 
-from events.sources.models import CandidateEventInput
-from events.sources.models import ParseIssue
-from events.sources.models import ParsePhase
-from events.sources.models import ParseResult
-from events.sources.models import ParseSeverity
-from events.sources.models import SourceDocument
-
+from events.sources.models import (
+    CandidateEventInput,
+    ParseIssue,
+    ParsePhase,
+    ParseResult,
+    ParseSeverity,
+    SourceDocument,
+)
 
 EVENT_TYPES = {"Event", "MusicEvent", "PerformingArtsEvent", "TheaterEvent"}
 START_DATE_RE = re.compile(
@@ -38,7 +37,9 @@ class _JsonLdScriptParser(HTMLParser):
         self._chunks: list[str] = []
         self.scripts: list[str] = []
 
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+    def handle_starttag(
+        self, tag: str, attrs: list[tuple[str, str | None]]
+    ) -> None:
         if tag.lower() != "script":
             return
         attributes = {key.lower(): value for key, value in attrs}
@@ -141,9 +142,13 @@ class JsonLdExtractor:
 
         title = _first_usable_string(node.get("name"))
         description = _first_usable_string(node.get("description"))
-        venue_name, city, region, country_code = _extract_location(node.get("location"))
+        venue_name, city, region, country_code = _extract_location(
+            node.get("location")
+        )
         organizer_name = _extract_name_field(node.get("organizer"))
-        performers = _extract_performers(node.get("performer"), node.get("performers"))
+        performers = _extract_performers(
+            node.get("performer"), node.get("performers")
+        )
         tags = _extract_tags(node.get("keywords"))
         source_url, had_failed_url = _resolve_source_url(
             node=node,
@@ -235,7 +240,9 @@ class JsonLdExtractor:
         return ParseIssue(
             code=code,
             phase=ParsePhase.PARSE,
-            severity=ParseSeverity.WARNING if code not in {"invalid_jsonld", "unsupported_jsonld_shape"} else ParseSeverity.ERROR,
+            severity=ParseSeverity.WARNING
+            if code not in {"invalid_jsonld", "unsupported_jsonld_shape"}
+            else ParseSeverity.ERROR,
             message=message,
             source_ref=source_ref,
         )
@@ -265,9 +272,9 @@ def _has_non_blank_string(value: object) -> bool:
 
 def _has_meaningful_url_candidate(value: object) -> bool:
     if isinstance(value, dict):
-        return _has_meaningful_url_candidate(value.get("url")) or _has_meaningful_url_candidate(
-            value.get("@id")
-        )
+        return _has_meaningful_url_candidate(
+            value.get("url")
+        ) or _has_meaningful_url_candidate(value.get("@id"))
     if isinstance(value, list):
         return any(_has_meaningful_url_candidate(item) for item in value)
     return _is_url_candidate_id(value)
@@ -277,7 +284,9 @@ def _has_url_candidate(value: object, *, field_name: str) -> bool:
     if isinstance(value, dict):
         return True
     if isinstance(value, list):
-        return any(_has_url_candidate(item, field_name=field_name) for item in value)
+        return any(
+            _has_url_candidate(item, field_name=field_name) for item in value
+        )
     if not isinstance(value, str):
         return False
     trimmed = value.strip()
@@ -332,7 +341,9 @@ def _extract_name_field(value: object) -> str | None:
     return None
 
 
-def _extract_location(value: object) -> tuple[str | None, str | None, str | None, str | None]:
+def _extract_location(
+    value: object,
+) -> tuple[str | None, str | None, str | None, str | None]:
     if isinstance(value, str):
         return _optional_string(value), None, None, None
     if isinstance(value, list):
@@ -341,7 +352,12 @@ def _extract_location(value: object) -> tuple[str | None, str | None, str | None
         region = None
         country_code = None
         for item in value:
-            extracted_venue, extracted_city, extracted_region, extracted_country = _extract_location(item)
+            (
+                extracted_venue,
+                extracted_city,
+                extracted_region,
+                extracted_country,
+            ) = _extract_location(item)
             if venue_name is None:
                 venue_name = extracted_venue
             if city is None:
@@ -350,7 +366,10 @@ def _extract_location(value: object) -> tuple[str | None, str | None, str | None
                 region = extracted_region
             if country_code is None:
                 country_code = extracted_country
-            if all(part is not None for part in (venue_name, city, region, country_code)):
+            if all(
+                part is not None
+                for part in (venue_name, city, region, country_code)
+            ):
                 break
         return venue_name, city, region, country_code
     if not isinstance(value, dict):
@@ -361,13 +380,17 @@ def _extract_location(value: object) -> tuple[str | None, str | None, str | None
     return venue_name, city, region, country_code
 
 
-def _extract_address_fields(value: object) -> tuple[str | None, str | None, str | None]:
+def _extract_address_fields(
+    value: object,
+) -> tuple[str | None, str | None, str | None]:
     if isinstance(value, list):
         city = None
         region = None
         country_code = None
         for item in value:
-            extracted_city, extracted_region, extracted_country = _extract_address_fields(item)
+            extracted_city, extracted_region, extracted_country = (
+                _extract_address_fields(item)
+            )
             if city is None:
                 city = extracted_city
             if region is None:
@@ -380,7 +403,9 @@ def _extract_address_fields(value: object) -> tuple[str | None, str | None, str 
     if not isinstance(value, dict):
         return None, None, None
     city = _first_usable_string(value.get("addressLocality"))
-    region = _first_normalized_value(value.get("addressRegion"), _normalize_region)
+    region = _first_normalized_value(
+        value.get("addressRegion"), _normalize_region
+    )
     country_code = _first_normalized_value(
         value.get("addressCountry"),
         _normalize_country_code,
@@ -480,8 +505,12 @@ def _resolve_source_url(
 ) -> tuple[str, bool]:
     had_candidate = False
     for field_name in ("url", "@id"):
-        candidates = _url_candidates(node.get(field_name), field_name=field_name)
-        if not candidates and _has_url_candidate(node.get(field_name), field_name=field_name):
+        candidates = _url_candidates(
+            node.get(field_name), field_name=field_name
+        )
+        if not candidates and _has_url_candidate(
+            node.get(field_name), field_name=field_name
+        ):
             had_candidate = True
         for candidate in candidates:
             had_candidate = True
@@ -508,7 +537,11 @@ def _url_candidates(value: object, *, field_name: str) -> tuple[str, ...]:
     if isinstance(value, dict):
         candidates: list[str] = []
         for nested_field_name in ("url", "@id"):
-            candidates.extend(_url_candidates(value.get(nested_field_name), field_name=field_name))
+            candidates.extend(
+                _url_candidates(
+                    value.get(nested_field_name), field_name=field_name
+                )
+            )
         return tuple(candidates)
     return ()
 

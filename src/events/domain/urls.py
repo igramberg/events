@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from urllib.parse import SplitResult
-from urllib.parse import urlsplit
+from urllib.parse import SplitResult, urlsplit
 
 
 def require_absolute_url(url: str) -> SplitResult:
