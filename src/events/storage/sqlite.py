@@ -8,20 +8,19 @@ from typing import Sequence
 
 from sqlalchemy import JSON
 from sqlalchemy import Column
+from sqlalchemy import Index
 from sqlalchemy import MetaData
 from sqlalchemy import String
 from sqlalchemy import Table
 from sqlalchemy import create_engine
 from sqlalchemy import delete
-from sqlalchemy import insert
 from sqlalchemy import select
-from sqlalchemy import update
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import and_
 from sqlalchemy.sql import or_
+from sqlalchemy.dialects.sqlite import insert
 
 from events.domain import WeekWindow
-from events.domain import week_window_for
 from events.domain.models import Event
 from events.domain.models import EventCategory
 from events.domain.models import IdentityKind
@@ -59,6 +58,8 @@ current_week_events = Table(
     Column("tags", JSON, nullable=False, default=list),
     Column("last_seen_at", String, nullable=False),
 )
+Index("idx_current_week_events_starts_at", current_week_events.c.starts_at)
+Index("idx_current_week_events_last_seen_at", current_week_events.c.last_seen_at)
 
 
 def create_tables(engine: Engine) -> None:
@@ -68,7 +69,10 @@ def create_tables(engine: Engine) -> None:
 def _require_tz(dt: datetime, name: str) -> datetime:
     if dt.tzinfo is None or dt.utcoffset() is None:
         raise ValueError(f"{name} must be timezone-aware UTC")
-    return dt.astimezone(UTC)
+    utc_dt = dt.astimezone(UTC)
+    if utc_dt != dt:
+        raise ValueError(f"{name} must be provided in UTC")
+    return utc_dt
 
 
 def serialize_starts_at(dt: datetime) -> str:

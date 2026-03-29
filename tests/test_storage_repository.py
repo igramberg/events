@@ -16,7 +16,6 @@ from events.domain.models import Location
 from events.domain.models import Organizer
 from events.domain.models import Venue
 from events.storage.sqlite import SqliteStorageRepository
-from events.storage.sqlite import build_sqlite_repository
 from events.storage.sqlite import create_tables
 from events.storage.sqlite import utc_bounds_for_window
 
@@ -174,3 +173,50 @@ def test_utc_bounds_helper_matches_expected_format():
     assert len(start_utc) == len("2026-03-30T00:00:00Z")
     assert len(end_utc) == len("2026-04-06T00:00:00Z")
 
+
+def test_identity_mismatch_raises_and_rolls_back_batch():
+    repo = make_repo()
+    refresh_ts = datetime(2026, 3, 29, 12, 0, tzinfo=ZoneInfo("UTC"))
+    good = make_event(
+        event_key="event:v1:roadrunner:occ:1",
+        occurrence_id="1",
+        title="One",
+        starts_at=datetime(2026, 3, 30, 1, 0, tzinfo=ZoneInfo("UTC")),
+    )
+    mismatched = make_event(
+        event_key="event:v1:roadrunner:occ:1",
+        occurrence_id="DIFFERENT",
+        title="Two",
+        starts_at=datetime(2026, 3, 31, 1, 0, tzinfo=ZoneInfo("UTC")),
+    )
+
+    repo.upsert_events([good], refresh_ts)
+    with pytest.raises(ValueError):
+        repo.upsert_events([mismatched], refresh_ts)
+
+    events = repo.get_events_for_window(week_window_for(datetime(2026, 3, 30, tzinfo=ZoneInfo("UTC"))))
+    assert [e.title for e in events] == ["One"]
+
+
+def test_window_end_is_exclusive():
+    repo = make_repo()
+    window = week_window_for(datetime(2026, 3, 30, tzinfo=LOCAL_TZ))
+    refresh_ts = datetime(2026, 3, 29, 12, 0, tzinfo=ZoneInfo("UTC"))
+
+    at_end = make_event(
+        event_key="event:v1:roadrunner:occ:3",
+        occurrence_id="3",
+        title="At End",
+        starts_at=window.end,  # exactly at upper bound
+    )
+    inside = make_event(
+        event_key="event:v1:roadrunner:occ:4",
+        occurrence_id="4",
+        title="Inside",
+        starts_at=window.start + timedelta(hours=1),
+    )
+
+    repo.upsert_events([at_end, inside], refresh_ts)
+    repo.prune_stale_events(window, refresh_ts)
+    events = repo.get_events_for_window(window)
+    assert [e.event_key for e in events] == ["event:v1:roadrunner:occ:4"]
