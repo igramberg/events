@@ -37,7 +37,7 @@ Deliverables for T4 should make it possible for T7 (manual refresh) to update st
 | --- | --- |
 | Storage domain | Maps canonical `Event` objects to SQLite rows | Tables are row-level projections of domain fields, not raw source documents |
 | Repository contract | Provides `upsert_events`, `get_events_for_window`, and `prune_stale_events` | Web/orchestration depends on the interface instead of SQL strings |
-| Time handling | Always store UTC timestamps (ISO format) for `starts_at` and `last_seen_at` | Repository converts `WeekWindow` local start/end instants in `America/New_York` to UTC via `utc_bounds_for_window(window)` → `(start_utc, end_utc)` in canonical `YYYY-MM-DDTHH:MM:SSZ`, start inclusive/end exclusive (no rounding beyond whole seconds; WeekWindow bounds are second-aligned in V0), and filters on `starts_at` in SQL (uses index); converts back to local only for display |
+| Time handling | Always store UTC timestamps (ISO format) for `starts_at` and `last_seen_at` | Repository converts `WeekWindow` local start/end instants in `America/New_York` to UTC via `utc_bounds_for_window(window)` → `(start_utc, end_utc)` in canonical second-precision `YYYY-MM-DDTHH:MM:SSZ` (start inclusive/end exclusive; WeekWindow bounds are second-aligned in V0) so it matches `starts_at` storage, then filters on `starts_at` in SQL (uses index); converts back to local only for display |
 | Schema ownership | Storage package owns schema migrations and SQLAlchemy metadata | Application wiring relies on repository factories, not inline `CREATE TABLE` statements |
 
 ### Key Tradeoffs
