@@ -37,7 +37,7 @@ Deliverables for T4 should make it possible for T7 (manual refresh) to update st
 | --- | --- |
 | Storage domain | Maps canonical `Event` objects to SQLite rows | Tables are row-level projections of domain fields, not raw source documents |
 | Repository contract | Provides `upsert_events`, `get_events_for_window`, and `prune_stale_events` | Web/orchestration depends on the interface instead of SQL strings |
-| Time handling | Always store UTC timestamps (ISO format) for `starts_at` and `last_seen_at` | Repository converts `WeekWindow` local start/end instants in `America/New_York` to UTC via `utc_bounds_for_window(window)` → `(start_utc, end_utc)` in canonical `YYYY-MM-DDTHH:MM:SSZ`, start inclusive/end exclusive (no rounding beyond whole seconds), and filters on `starts_at` in SQL (uses index); converts back to local only for display |
+| Time handling | Always store UTC timestamps (ISO format) for `starts_at` and `last_seen_at` | Repository converts `WeekWindow` local start/end instants in `America/New_York` to UTC via `utc_bounds_for_window(window)` → `(start_utc, end_utc)` in canonical `YYYY-MM-DDTHH:MM:SSZ`, start inclusive/end exclusive (no rounding beyond whole seconds; WeekWindow bounds are second-aligned in V0), and filters on `starts_at` in SQL (uses index); converts back to local only for display |
 | Schema ownership | Storage package owns schema migrations and SQLAlchemy metadata | Application wiring relies on repository factories, not inline `CREATE TABLE` statements |
 
 ### Key Tradeoffs
@@ -77,7 +77,7 @@ Table `current_week_events` (name chosen to make scope explicit).
 | `country_code` | `TEXT` | NOT NULL | Display country code. |
 | `organizer_key` | `TEXT` | NULLABLE | Optional organizer identity (must be null when `organizer_name` is null, and vice versa). |
 | `organizer_name` | `TEXT` | NULLABLE | Display organizer label (must be null when `organizer_key` is null). |
-| `starts_at` | `TEXT` | NOT NULL | ISO 8601 UTC timestamp, required fixed-width `YYYY-MM-DDTHH:MM:SSZ` (same as `format_starts_at_utc`; second precision aligns with domain identity rules); we never store naive datetimes. |
+| `starts_at` | `TEXT` | NOT NULL | ISO 8601 UTC timestamp, required fixed-width `YYYY-MM-DDTHH:MM:SSZ` (same as `format_starts_at_utc`; second precision aligns with domain identity rules and UTC bounds). We never store naive datetimes. |
 | `source_url` | `TEXT` | NOT NULL | Provenance URL. |
 | `source_name` | `TEXT` | NOT NULL | Source slug. |
 | `source_event_id` | `TEXT` | NULLABLE | Optional source-native ID. |
