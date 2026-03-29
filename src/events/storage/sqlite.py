@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC
 from datetime import datetime
+from datetime import timedelta
 from typing import Sequence
 
 from sqlalchemy import JSON
@@ -66,22 +67,30 @@ def create_tables(engine: Engine) -> None:
     metadata.create_all(engine)
 
 
-def _require_tz(dt: datetime, name: str) -> datetime:
+def _require_aware(dt: datetime, name: str) -> datetime:
     if dt.tzinfo is None or dt.utcoffset() is None:
-        raise ValueError(f"{name} must be timezone-aware UTC")
-    utc_dt = dt.astimezone(UTC)
-    if utc_dt != dt:
+        raise ValueError(f"{name} must be timezone-aware")
+    return dt
+
+
+def _require_utc(dt: datetime, name: str) -> datetime:
+    _require_aware(dt, name)
+    if dt.utcoffset() != timedelta(0):
         raise ValueError(f"{name} must be provided in UTC")
-    return utc_dt
+    return dt.astimezone(UTC)
+
+
+def _to_utc(dt: datetime, name: str) -> datetime:
+    return _require_aware(dt, name).astimezone(UTC)
 
 
 def serialize_starts_at(dt: datetime) -> str:
-    utc_dt = _require_tz(dt, "starts_at")
+    utc_dt = _to_utc(dt, "starts_at")
     return utc_dt.replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def serialize_refresh_timestamp(dt: datetime) -> str:
-    utc_dt = _require_tz(dt, "refresh_timestamp")
+    utc_dt = _require_utc(dt, "refresh_timestamp")
     return utc_dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
@@ -94,8 +103,8 @@ def deserialize_last_seen_at(value: str) -> datetime:
 
 
 def utc_bounds_for_window(window: WeekWindow) -> tuple[str, str]:
-    start_utc = _require_tz(window.start, "week_window.start")
-    end_utc = _require_tz(window.end, "week_window.end")
+    start_utc = _to_utc(window.start, "week_window.start")
+    end_utc = _to_utc(window.end, "week_window.end")
     return (
         start_utc.replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ"),
         end_utc.replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ"),

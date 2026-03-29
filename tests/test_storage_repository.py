@@ -15,8 +15,11 @@ from events.domain.models import IdentityKind
 from events.domain.models import Location
 from events.domain.models import Organizer
 from events.domain.models import Venue
+from sqlalchemy.dialects.sqlite import insert
+
 from events.storage.sqlite import SqliteStorageRepository
 from events.storage.sqlite import create_tables
+from events.storage.sqlite import current_week_events
 from events.storage.sqlite import utc_bounds_for_window
 
 
@@ -183,16 +186,39 @@ def test_identity_mismatch_raises_and_rolls_back_batch():
         title="One",
         starts_at=datetime(2026, 3, 30, 1, 0, tzinfo=ZoneInfo("UTC")),
     )
-    mismatched = make_event(
-        event_key="event:v1:roadrunner:occ:1",
-        occurrence_id="DIFFERENT",
-        title="Two",
-        starts_at=datetime(2026, 3, 31, 1, 0, tzinfo=ZoneInfo("UTC")),
-    )
 
     repo.upsert_events([good], refresh_ts)
+
+    # Seed conflicting identity directly in the table
+    with repo.engine.begin() as conn:
+        conn.execute(
+            insert(current_week_events).values(
+                event_key="event:v1:roadrunner:occ:1",
+                identity_kind="occurrence_id",
+                identity_inputs='{"source_name":"roadrunner","occurrence_id":"DIFFERENT"}',
+                title="Corrupt",
+                category="concert",
+                venue_key=good.venue.venue_key,
+                venue_name=good.venue.venue_name,
+                location_key=good.venue.location.location_key,
+                city=good.venue.location.city,
+                region=good.venue.location.region,
+                country_code=good.venue.location.country_code,
+                organizer_key=None,
+                organizer_name=None,
+                starts_at="2026-03-31T01:00:00Z",
+                source_url=good.source_url,
+                source_name=good.source_name,
+                source_event_id="DIFFERENT",
+                description=good.description,
+                performers=["Band"],
+                tags=["rock"],
+                last_seen_at="2026-03-29T12:00:00.000000Z",
+            ),
+        )
+
     with pytest.raises(ValueError):
-        repo.upsert_events([mismatched], refresh_ts)
+        repo.upsert_events([good], refresh_ts)
 
     events = repo.get_events_for_window(week_window_for(datetime(2026, 3, 30, tzinfo=ZoneInfo("UTC"))))
     assert [e.title for e in events] == ["One"]
