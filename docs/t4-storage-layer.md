@@ -37,7 +37,7 @@ Deliverables for T4 should make it possible for T7 (manual refresh) to update st
 | --- | --- |
 | Storage domain | Maps canonical `Event` objects to SQLite rows | Tables are row-level projections of domain fields, not raw source documents |
 | Repository contract | Provides `upsert_events`, `get_events_for_window`, and `prune_stale_events` | Web/orchestration depends on the interface instead of SQL strings |
-| Time handling | Always store UTC timestamps (ISO format) for `starts_at` and `last_seen_at` | Convert `WeekWindow` start/end (local) to UTC strings in the same canonical format as `starts_at` (`YYYY-MM-DDTHH:MM:SSZ`) and filter on `starts_at` in SQL (uses index); convert back to local only for display |
+| Time handling | Always store UTC timestamps (ISO format) for `starts_at` and `last_seen_at` | Repository converts `WeekWindow` start/end (local) to UTC strings in the same canonical format as `starts_at` (`YYYY-MM-DDTHH:MM:SSZ`) and filters on `starts_at` in SQL (uses index); converts back to local only for display |
 | Schema ownership | Storage package owns schema migrations and SQLAlchemy metadata | Application wiring relies on repository factories, not inline `CREATE TABLE` statements |
 
 ### Key Tradeoffs
@@ -54,8 +54,8 @@ The storage package exposes a `StorageRepository` abstraction backed by a SQLAlc
 1. Converts domain `Event` instances into flattened `EventRecord` dataclasses (lossless for every `identity_kind`).
 2. Executes an upsert keyed on `event_key` using `ON CONFLICT(event_key) DO UPDATE` that replaces mutable fields (title/category/description/organizer/performers/tags/etc.) but rejects changes to identity material (`identity_kind`, `identity_inputs`) for an existing key (raises, leaves the row unchanged, and should cause the refresh to be treated as failed so prune is skipped).
 3. Tags each row with `last_seen_at` (UTC) set to the refresh timestamp provided by the caller.
-4. Queries rows whose `starts_at` falls within a supplied `WeekWindow` by converting the window bounds to UTC strings and filtering in SQL on `starts_at` (indexable, start inclusive/end exclusive), then returns results sorted as specified.
-5. Deletes rows whose `last_seen_at` is older than the last refresh or whose `starts_at` lies outside the requested window using the same UTC-bound SQL filtering as reads (start inclusive, end exclusive).
+4. Queries rows whose `starts_at` falls within a supplied `WeekWindow` by converting the window bounds to UTC strings (done inside the repository) in the canonical `YYYY-MM-DDTHH:MM:SSZ` format and filtering in SQL on `starts_at` (indexable, start inclusive/end exclusive), then returns results sorted as specified.
+5. Deletes rows whose `last_seen_at` is older than the last refresh or whose `starts_at` lies outside the requested window using the same repository-owned UTC-bound SQL filtering as reads (start inclusive, end exclusive).
 
 The web layer uses the repository to power the weekly list endpoint. Manual refresh orchestration calls `upsert_events()` and then `prune_stale_events()` before reporting success.
 
@@ -118,7 +118,7 @@ class StorageRepository(Protocol):
         ...
 ```
 
-- `refresh_timestamp` is the refresh start time supplied by the orchestrator; it must be timezone-aware UTC `datetime`. The repository serializes it to fixed-width `YYYY-MM-DDTHH:MM:SS.ssssssZ`; inputs must be UTC and naive datetimes are rejected. Non-canonical fractional widths are also rejected. `upsert_events` and `prune_stale_events` must receive the same value, even if the refresh spans midnight. (Optional) `refresh_id` may be supplied for stricter ordering if concurrent refreshes are ever allowed.
+- `refresh_timestamp` is the refresh start time supplied by the orchestrator; it must be timezone-aware UTC `datetime`. The repository serializes it via `strftime('%Y-%m-%dT%H:%M:%S.%fZ')` (fixed-width microseconds); inputs must be UTC and naive datetimes or non-canonical fractional widths are rejected. `upsert_events` and `prune_stale_events` must receive the same value, even if the refresh spans midnight. (Optional) `refresh_id` may be supplied for stricter ordering if concurrent refreshes are ever allowed.
 - `upsert_events` writes each event row inside a single transaction per call, performs `ON CONFLICT DO UPDATE` (identity material must match existing row; mismatch raises, rolls back the batch, and leaves existing rows unchanged), and sets `last_seen_at = refresh_timestamp`.
 - `get_events_for_window` reads rows whose `starts_at` falls inside `window` by filtering in SQL on UTC string bounds and returns results sorted by `starts_at` ascending, then `venue_name`, then `event_key`.
 - `prune_stale_events` deletes rows whose `last_seen_at < refresh_timestamp` (meaning they were missing in the current refresh) *or* whose `starts_at` is outside `window` after converting `WeekWindow` bounds to UTC strings and comparing in SQL; start is inclusive, end is exclusive, so equality on the upper bound prunes. If any upsert raises (e.g., identity mismatch), the refresh is considered failed/partial and `prune_stale_events` must be skipped.
@@ -135,7 +135,7 @@ Manual refresh orchestration will:
 Keeping a single `refresh_started_at` timestamp ensures `last_seen_at` comparisons are stable even if a refresh spans midnight or a DST transition.
 
 ### Transaction and Consistency Expectations
-- V0 can run `upsert_events` and `prune_stale_events` in separate transactions; no cross-call transaction requirement. If a refresh crashes after `upsert_events` commits but before prune, readers may briefly see a pre-prune superset until the next successful refresh; acceptable for V0.
+- V0 can run `upsert_events` and `prune_stale_events` in separate transactions; no cross-call transaction requirement. If a refresh crashes after `upsert_events` commits but before prune, readers may briefly see a pre-prune superset until the next successful refresh prunes it; acceptable for V0.
 - A future improvement may wrap a refresh in one transaction to avoid mixed-state reads; optional, not required for V0 manual refresh. Callers that need stronger consistency can wrap both calls in one transaction.
 
 ### Migration and Configuration
