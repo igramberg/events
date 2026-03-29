@@ -16,7 +16,6 @@ from sqlalchemy import Table
 from sqlalchemy import create_engine
 from sqlalchemy import delete
 from sqlalchemy import select
-from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import and_
 from sqlalchemy.sql import or_
@@ -56,8 +55,8 @@ current_week_events = Table(
     Column("source_name", String, nullable=False),
     Column("source_event_id", String, nullable=True),
     Column("description", String, nullable=True),
-    Column("performers", JSON, nullable=False, default=list, server_default=text("'[]'")),
-    Column("tags", JSON, nullable=False, default=list, server_default=text("'[]'")),
+    Column("performers", JSON, nullable=False, default=list, server_default="[]"),
+    Column("tags", JSON, nullable=False, default=list, server_default="[]"),
     Column("last_seen_at", String, nullable=False),
 )
 Index("idx_current_week_events_starts_at", current_week_events.c.starts_at)

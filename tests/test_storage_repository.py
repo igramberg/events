@@ -193,18 +193,20 @@ def test_utc_bounds_helper_matches_expected_format():
 def test_identity_mismatch_raises_and_rolls_back_batch():
     repo = make_repo()
     refresh_ts = datetime(2026, 3, 29, 12, 0, tzinfo=ZoneInfo("UTC"))
-    window = week_window_for(datetime(2026, 3, 30, tzinfo=ZoneInfo("UTC")))
+    # Use a local (America/New_York) reference date so it's obvious which
+    # WeekWindow we're querying.
+    window = week_window_for(datetime(2026, 3, 31, tzinfo=LOCAL_TZ))
     incoming = make_event(
         event_key="event:v1:roadrunner:occ:1",
         occurrence_id="1",
         title="One",
-        starts_at=datetime(2026, 3, 30, 1, 0, tzinfo=ZoneInfo("UTC")),
+        starts_at=datetime(2026, 3, 31, 1, 0, tzinfo=ZoneInfo("UTC")),
     )
     other = make_event(
         event_key="event:v1:roadrunner:occ:2",
         occurrence_id="2",
         title="Two",
-        starts_at=datetime(2026, 3, 30, 2, 0, tzinfo=ZoneInfo("UTC")),
+        starts_at=datetime(2026, 3, 31, 2, 0, tzinfo=ZoneInfo("UTC")),
     )
 
     # Seed a corrupted existing row directly in the table (identity_inputs does
@@ -226,7 +228,9 @@ def test_identity_mismatch_raises_and_rolls_back_batch():
                 country_code=incoming.venue.location.country_code,
                 organizer_key=incoming.organizer.organizer_key if incoming.organizer else None,
                 organizer_name=incoming.organizer.name if incoming.organizer else None,
-                starts_at="2026-03-31T01:00:00Z",  # keep corrupted row out of window queries
+                # Keep the corrupted row out of the queried WeekWindow so
+                # get_events_for_window() doesn't try to hydrate a domain-invalid row.
+                starts_at="2026-04-07T01:00:00Z",
                 source_url=incoming.source_url,
                 source_name=incoming.source_name,
                 source_event_id="DIFFERENT",
