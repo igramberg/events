@@ -45,7 +45,7 @@ Deliverables for T4 should make it possible for T7 (manual refresh) to update st
 | --- | --- | --- | --- |
 | SQL library | SQLAlchemy 2.x Core + typing helpers | SQLAlchemy keeps the schema declarative, supports in-memory SQLite for tests, and is future-proof | Adds a dependency; increases surface area for future developers |
 | Structured columns | Use JSON blobs for `identity_inputs`, `performers`, and `tags` | Keeps schema stable even if identity inputs gain new keys or arrays grow | Querying nested fields is harder; but storage only reads entire blobs |
-| Pruning trigger | Explicit `prune_stale_events` call after each refresh | Clear lifecycle and easy to test | Requires the orchestrator to remember to call it, but that is part of the manual refresh choreography |
+| Pruning trigger | Explicit `prune_stale_events` call after each successful refresh | Clear lifecycle and easy to test | Requires the orchestrator to remember to call it, but that is part of the manual refresh choreography |
 
 ## Technical Design
 
@@ -84,7 +84,7 @@ Table `current_week_events` (name chosen to make scope explicit).
 | `description` | `TEXT` | NULLABLE | Optional rich text. |
 | `performers` | `JSON` (`TEXT`) | NOT NULL DEFAULT `'[]'` | Stored as JSON array of strings; preserves insertion order; no dedupe. |
 | `tags` | `JSON` (`TEXT`) | NOT NULL DEFAULT `'[]'` | Stored as JSON array of strings; preserves insertion order; no dedupe. |
-| `last_seen_at` | `TEXT` | NOT NULL | UTC timestamp for the most recent refresh, required fixed-width format `YYYY-MM-DDTHH:MM:SS.ssssssZ` to keep lexicographic comparisons/indexes valid; matches `refresh_timestamp` format. |
+| `last_seen_at` | `TEXT` | NOT NULL | UTC timestamp for the most recent refresh, required fixed-width format `YYYY-MM-DDTHH:MM:SS.ssssssZ` to keep lexicographic comparisons/indexes valid; matches `refresh_timestamp` format. Non-canonical strings must be rejected. |
 
 Indexes:
 - Primary key on `event_key` ensures deterministic upserts.
@@ -118,10 +118,10 @@ class StorageRepository(Protocol):
         ...
 ```
 
-- `refresh_timestamp` is the refresh start time supplied by the orchestrator; it must be timezone-aware UTC in fixed-width `YYYY-MM-DDTHH:MM:SS.ssssssZ`. `upsert_events` and `prune_stale_events` must receive the same value, even if the refresh spans midnight. Implementations may accept an optional unique `refresh_id` to guarantee ordering if two refreshes start within the same microsecond.
-- `upsert_events` writes each event row, performs `ON CONFLICT DO UPDATE` (identity material must match existing row; mismatch raises and skips update), and sets `last_seen_at = refresh_timestamp`.
+- `refresh_timestamp` is the refresh start time supplied by the orchestrator; it must be timezone-aware UTC datetime. The repository serializes it to fixed-width `YYYY-MM-DDTHH:MM:SS.ssssssZ`; inputs must be canonical, and non-UTC or naive values are rejected. `upsert_events` and `prune_stale_events` must receive the same value, even if the refresh spans midnight. Implementations may accept an optional unique `refresh_id` to guarantee ordering if two refreshes start within the same microsecond.
+- `upsert_events` writes each event row inside a single transaction per call, performs `ON CONFLICT DO UPDATE` (identity material must match existing row; mismatch raises, rolls back the batch, and leaves existing rows unchanged), and sets `last_seen_at = refresh_timestamp`.
 - `get_events_for_window` reads rows whose `starts_at` falls inside `window` by filtering in SQL on UTC string bounds and returns results sorted by `starts_at` ascending, then `venue_name`, then `event_key`.
-- `prune_stale_events` deletes rows whose `last_seen_at < refresh_timestamp` (meaning they were missing in the current refresh) *or* whose `starts_at` is outside `window` after converting `WeekWindow` bounds to UTC strings and comparing in SQL; start is inclusive, end is exclusive, so equality on the upper bound prunes. If an upsert raises an identity mismatch, the refresh is considered failed/partial and `prune_stale_events` must be skipped.
+- `prune_stale_events` deletes rows whose `last_seen_at < refresh_timestamp` (meaning they were missing in the current refresh) *or* whose `starts_at` is outside `window` after converting `WeekWindow` bounds to UTC strings and comparing in SQL; start is inclusive, end is exclusive, so equality on the upper bound prunes. If any upsert raises (e.g., identity mismatch), the refresh is considered failed/partial and `prune_stale_events` must be skipped.
 
 The concrete repository will use SQLAlchemy Core metadata plus `text` serialization helpers for JSON columns.
 
@@ -129,7 +129,7 @@ The concrete repository will use SQLAlchemy Core metadata plus `text` serializat
 Manual refresh orchestration will:
 1. Compute the authoritative `WeekWindow` (`week_window_for(datetime.now(tz=UTC))`; Monday-based in `America/New_York`). Callers may supply any `WeekWindow`, but production use remains Monday-based and only one active window is supported at a time.
 2. Capture `refresh_started_at` once (tz-aware UTC, high-resolution) and pass it to both `upsert_events(events, refresh_started_at)` and `prune_stale_events(window, refresh_started_at)`.
-3. Call `prune_stale_events(window, refresh_started_at)` once all candidates have been processed and the refresh has succeeded; skip if any upsert raised (e.g., identity mismatch) or if the refresh is partial/failed to avoid data loss.
+3. Call `prune_stale_events(window, refresh_started_at)` once all candidates have been processed and the refresh has succeeded; skip if any upsert raised (e.g., identity mismatch) or if the refresh is partial/failed to avoid data loss. A successful refresh implies the upsert batch completed in one transaction.
 4. Query `get_events_for_window(window)` when rendering the UI.
 
 Keeping a single `refresh_started_at` timestamp ensures `last_seen_at` comparisons are stable even if a refresh spans midnight or a DST transition.
@@ -159,7 +159,7 @@ Keeping a single `refresh_started_at` timestamp ensures `last_seen_at` compariso
 - `test_storage_repository_prune_missing`: Rows not upserted during the latest successful refresh are deleted after `prune_stale_events`.
 - `test_storage_repository_prune_by_window`: An event outside the `WeekWindow` is pruned even if `last_seen_at` matches; build the window in `America/New_York`, convert bounds to UTC strings, and verify SQL filtering handles DST/weekly boundaries.
 - `test_storage_repository_week_window_filtering`: Events exactly on window edges are included/excluded using the same logic as `event_in_week_window`.
-- `test_storage_repository_rejects_naive_refresh_timestamp`: Repository raises or rejects naive datetimes passed as `refresh_timestamp`.
+- `test_storage_repository_rejects_naive_refresh_timestamp`: Repository raises or rejects naive datetimes passed as `refresh_timestamp` and any non-canonical string formatting.
 
 Tests should rely on in-memory SQLite engines created per test and the SQLAlchemy metadata defined in this package.
 
