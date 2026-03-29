@@ -19,6 +19,8 @@ Build a local web app that assembles a weekly list of greater Boston events from
 | Output | Single weekly events list | Later phases may add filtering and richer views |
 | Storage window | Current week only | Older and out-of-window events are pruned |
 | Refresh model | Manual refresh in V0 | Scheduler added after V0 |
+| Authoritative week window | Monday `00:00` to next Monday `00:00` in `America/New_York` | Shared rule across T2, T4, and T5 |
+| Geo representation in V0 | Source-driven coverage plus domain location keys | No geo filtering beyond chosen sources in V0 |
 
 ### Event Category Scope
 
@@ -64,17 +66,17 @@ Build a local web app that assembles a weekly list of greater Boston events from
 
 | Boundary | Responsibility |
 | --- | --- |
-| `domain` | Event model, category definitions, inclusion rules |
-| `sources` | Fetching and parsing official source pages |
-| `storage` | Persistence, deduplication support, current-week pruning |
-| `web` | HTML routes, refresh actions, view models |
+| `domain` | Canonical `Event` shape, field normalization rules, identity rules, category definitions, and inclusion rules |
+| `sources` | Fetch raw source data, parse source-specific payloads, and emit adapter-owned candidate inputs for domain construction |
+| `storage` | Persistence, within-source upsert support by `event_key`, and current-week pruning; cross-source deduplication is out of scope |
+| `web` | HTML routes, refresh actions, orchestration, and view models |
 
 ### Context Diagram
 
 ```mermaid
 flowchart LR
     A[Official Venue and Organization Sources] --> B[Source Adapters]
-    B --> C[Domain Normalization]
+    B --> C[Domain Construction and Inclusion]
     C --> D[SQLite Current-Week Store]
     D --> E[FastAPI Web App]
     E --> F[Local Browser]
@@ -96,26 +98,40 @@ sequenceDiagram
 
     U->>W: Trigger manual refresh
     W->>S: Fetch and parse official sources
-    S-->>W: Normalized events
+    S-->>W: Candidate event inputs
+    W->>W: Construct domain Events and apply week/category inclusion rules
     W->>D: Upsert current-week events and prune stale rows
     D-->>W: Refresh complete
     W-->>U: Render updated weekly list and refresh status
 ```
 
-### Data Model Direction
+### Canonical Domain Reference
+
+The canonical domain shape is defined in [t2-domain-model.md](./t2-domain-model.md).
+
+This architecture document does not redefine the domain model; it depends on the T2 identity and inclusion rules.
+
+### Storage Record Direction
 
 | Field | Purpose |
 | --- | --- |
-| `title` | Display name of the event |
-| `category` | Domain classification such as `concert` or `theater` |
-| `venue` | Venue or host name |
-| `city` | Greater Boston locality |
-| `starts_at` | Start date and time |
-| `source_url` | Direct event or listing URL |
-| `source_name` | Name of the originating source |
-| `last_seen_at` | Timestamp used during refresh and pruning |
-
-The model should support deferred categories without redesigning the schema.
+| `event_key` | Stable domain identity for one current record |
+| `title` | Stored display title |
+| `category` | Stored category used by the weekly UI |
+| `venue_key` | Stable venue identifier |
+| `venue_name` | Stored venue display name |
+| `location_key` | Stable location identifier |
+| `city` | Stored location display field |
+| `region` | Stored location display field |
+| `country_code` | Stored location display field |
+| `organizer_key` | Optional organizer identifier |
+| `organizer_name` | Optional organizer display field |
+| `starts_at` | Timezone-aware start datetime |
+| `source_url` | Absolute provenance/display URL only |
+| `source_name` | Stable internal source identifier |
+| `identity_kind` | Which identity branch produced `event_key` |
+| `identity_inputs` | Structured identity material used to derive `event_key` |
+| `last_seen_at` | Refresh timestamp used for pruning and stale-record handling |
 
 ### Storage Direction
 
@@ -124,11 +140,16 @@ The model should support deferred categories without redesigning the schema.
 | Persistence scope | Store only current-week events |
 | Cleanup policy | Prune rows outside the current week during refresh |
 | Isolation | Keep storage logic behind a repository layer |
+| Repository boundary | Web and source orchestration must depend on repository interfaces, not inline SQL |
+| Query/build style | Prefer a persistence layer that keeps SQLite an implementation detail rather than a business-logic dependency; SQLAlchemy 2.x is the current recommendation |
+| Migrations | Prefer explicit schema migrations rather than ad hoc table creation in application code; Alembic is the current recommendation |
 | Migration posture | Avoid SQLite-specific coupling so Postgres remains a cheap later move |
 
 ### Source Ingestion Rules
 
 1. Start from official source pages only.
 2. Attempt generic structured-data extraction first, including JSON-LD and similar machine-readable payloads.
-3. Introduce source-specific parsing only for sources where generic extraction is insufficient.
-4. Keep source adapters isolated so future category packs can be added incrementally.
+3. Let adapters extract source-native identifiers and source-specific metadata, but emit candidate inputs rather than making storage-shape decisions.
+4. Construct canonical domain `Event` objects and apply weekly/category inclusion after adapter parsing, using the shared T2 rules.
+5. Introduce source-specific parsing only for sources where generic extraction is insufficient.
+6. Keep source adapters isolated so future category packs can be added incrementally.

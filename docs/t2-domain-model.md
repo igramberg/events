@@ -12,7 +12,7 @@ Establish a minimal but stable domain contract for weekly events in the greater 
 
 The output of this task should be sufficient for:
 
-- source adapters to normalize parsed data into one event shape
+- source adapters to emit candidate event inputs for canonical domain construction
 - storage code to persist current-week events consistently
 - web routes to render a unified weekly list
 - future personalization features to attach user preferences without redesigning the core event model
@@ -70,12 +70,14 @@ Storage mapping and table design are deferred to T4. The goal in T2 is to define
 | Field | Required | Purpose |
 | --- | --- | --- |
 | `event_key` | Yes | Stable event identifier for storage and user feedback attachment |
+| `identity_kind` | Yes | Closed-set identity branch used to derive `event_key` |
+| `identity_inputs` | Yes | Structured inputs used to derive `event_key` |
 | `title` | Yes | Human-readable event title |
 | `category` | Yes | Domain category |
 | `venue` | Yes | Venue value object |
 | `organizer` | No | Organizer value object when the source provides it |
 | `starts_at` | Yes | Timezone-aware event start |
-| `source_url` | Yes | Canonical source URL |
+| `source_url` | Yes | Absolute provenance/display URL only |
 | `source_event_id` | No | Optional source-native event identifier when exposed by the source |
 | `source_name` | Yes | Stable internal source identifier used for provenance and source-scoped keys |
 | `description` | No | Optional richer event text for future filtering and recommendation |
@@ -83,6 +85,8 @@ Storage mapping and table design are deferred to T4. The goal in T2 is to define
 | `tags` | No | Optional normalized tags for future recommendation and filtering |
 
 `last_seen_at` is intentionally deferred from the T2 domain object because it belongs more naturally to refresh and persistence concerns introduced later.
+
+Adapters must provide `source_url` as an absolute URL.
 
 ### Performance Granularity Rule
 
@@ -132,20 +136,25 @@ Cross-source deduplication is a later concern and must not be inferred from `eve
 
 | Input Type | Rule |
 | --- | --- |
-| Text used in keys | Apply Unicode NFKC normalization, trim, collapse internal whitespace, lowercase |
-| Free-form text in final key components | Encode normalized text as UTF-8 and percent-encode to URL-safe ASCII, leaving only RFC 3986 unreserved characters unescaped |
-| URL used in keys | Lowercase scheme and host, remove fragment, drop `utm_*`, `gclid`, `fbclid`, `mc_cid`, and `mc_eid`, remove default ports `:80` for `http` and `:443` for `https`, normalize percent-encoding to uppercase hex for unreserved characters, sort remaining query parameters by key then value, preserve semantic path and stable query values |
+| Domain text used in keys | Apply Unicode NFKC normalization, trim, collapse internal whitespace, casefold |
+| Source-native identifiers used in keys | Treat as opaque values; do not apply NFKC, casefold, or whitespace normalization. Store raw values in `identity_inputs`, then encode deterministically as UTF-8 and percent-encode bytes outside RFC 3986 unreserved characters when constructing key material. Percent escapes use uppercase hex digits |
+| Free-form text in final key components | Encode normalized text as UTF-8 and percent-encode to URL-safe ASCII, leaving only RFC 3986 unreserved characters unescaped. Percent escapes use uppercase hex digits |
 | Country and region | Lowercase in key material, preserve uppercase only for display fields if needed later |
 | UTC timestamps used in keys | Convert to UTC and serialize as ISO 8601 with whole-second precision in the form `YYYY-MM-DDTHH:MM:SSZ` |
+| Fallback title normalization | Domain-defined, not adapter-defined; adapters provide raw titles and the domain applies the text rules above with `normalization_version = v1` |
 
 #### Key Scope and Derivation
+
+Derived keys are opaque identifiers. The human-readable segments shown below are part of the wire format, but only the top-level `{type}:v1:` prefix is a supported structural contract. Consumers must not parse nested semantics such as `{source_name}`, `{branch}`, or embedded component boundaries by splitting the remainder on `:`.
+
+Code must branch on `identity_kind` and `identity_inputs`, not by parsing `event_key`, even though `event_key` contains human-readable segments.
 
 | Key | Scope | V1 Derivation Rule |
 | --- | --- | --- |
 | `location_key` | App-global | `loc:v1:{country_code}:{region}:{city}` from normalized display location fields |
-| `venue_key` | App-global | `venue:v1:{location_key}:{venue_name}` from normalized venue name plus `location_key` |
+| `venue_key` | App-global | `venue:v1:{location_key_encoded}:{venue_name}` from normalized venue name plus the encoded `location_key` component |
 | `organizer_key` | App-global | `org:v1:{name}` from normalized organizer display name |
-| `event_key` | Source-scoped | `event:v1:{source_name}:{identifier}` where `identifier` is chosen by precedence rules below |
+| `event_key` | Source-scoped | `event:v1:{source_name}:{branch}:{identifier}` where `branch` is one of `occ`, `src`, or `hash` |
 
 `venue_key` and `organizer_key` are intended to be app-global identifiers so that user preferences can attach to one venue or organizer concept across sources when names remain stable.
 
@@ -153,20 +162,90 @@ In V1, these keys are still name-derived and may change if venues or organizers 
 
 In V1, `organizer_key` may also collide for distinct organizers that share the same normalized name. This is an accepted V1 risk. Later work may introduce organizer aliases or additional disambiguators if collisions become material.
 
-`source_name` must be a stable internal source identifier, not a display label. Renaming an adapter's `source_name` would rewrite all source-scoped `event_key` values for that source.
+`source_name` must be a stable internal source slug/identifier, not a display label, and it must match `^[a-z0-9_-]+$`. Renaming an adapter's `source_name` is a breaking key change for that source.
+
+#### Identity Kinds
+
+`identity_kind` is a closed set:
+
+- `occurrence_id`
+- `source_event_id_starts_at`
+- `fallback_hash`
+
+`identity_kind` maps to the `event_key` branch token as follows:
+
+- `occurrence_id` -> `occ`
+- `source_event_id_starts_at` -> `src`
+- `fallback_hash` -> `hash`
+
+#### Identity Inputs
+
+`identity_inputs` is a structured object containing exactly the logical values used to derive `event_key`. Source-native IDs are stored as raw values in `identity_inputs`; percent-encoding is a deterministic derivation step used only when constructing the final key string.
+
+When `identity_inputs` contains `starts_at_utc`, it must use the exact normalized UTC string that participates in key material: `YYYY-MM-DDTHH:MM:SSZ` with whole-second precision.
+
+Examples:
+
+- `occurrence_id`:
+  - `{"source_name": "...", "occurrence_id": "..."}`
+- `source_event_id_starts_at`:
+  - `{"source_name": "...", "source_event_id": "...", "starts_at_utc": "..."}`
+- `fallback_hash`:
+  - `{"source_name": "...", "normalized_title": "...", "starts_at_utc": "...", "venue_key": "...", "normalization_version": "v1"}`
+
+For `fallback_hash`, `normalization_version` participates in derivation because it identifies the exact normalization contract used to produce `normalized_title`.
 
 #### `event_key` Identifier Precedence
 
-1. Use an explicit source-native occurrence identifier when the source exposes an identifier that uniquely identifies one concrete performance.
-2. Otherwise use a source-native event identifier plus `starts_at_utc` when the identifier represents a series, production, or container with multiple performances.
-3. Otherwise use a normalized canonical event URL plus `starts_at_utc` when the URL may represent multiple performances or when uniqueness is uncertain.
-4. Otherwise use a hash of `(source_name, normalized_title, starts_at_utc, venue_key)`.
+##### Branch 1: `occurrence_id`
 
-When uniqueness is uncertain, `starts_at_utc` must be included in the identifier material.
+Use `occurrence_id` only when `(source_name, occurrence_id)` identifies exactly one concrete performance.
 
-This keeps `event_key` stable for refresh and user-state attachment while avoiding collisions between multiple showtimes listed under one source identifier or one source page.
+Format: `event:v1:{source_name}:occ:{occurrence_id_encoded}`
 
-`source_url` is a provenance field and may point to a page that contains multiple performances. Identity and deduplication are based on `event_key`, not on `source_url`.
+In branch `occurrence_id`, `event_key` remains stable even if `starts_at_utc` is later corrected or rescheduled.
+
+Adapters must not set `occurrence_id` unless the source guarantees that `(source_name, occurrence_id)` continues to identify exactly one concrete performance over time, not merely because it appears unique in current URLs or markup.
+
+##### Branch 2: `source_event_id_starts_at`
+
+If the source-native identifier is a series/container identifier, or the adapter is not sure it is stable per performance, treat it as `source_event_id` instead.
+
+Use `source_event_id_starts_at` when the adapter has a stable series/container identifier and a concrete `starts_at_utc`.
+
+Format: `event:v1:{source_name}:src:{source_event_id_encoded}:{starts_at_utc_encoded}`
+
+If a source's `source_event_id` can span multiple venues, cities, or performances, the adapter must either emit a true `occurrence_id` or scope `source_event_id` so `(source_name, source_event_id, starts_at_utc)` is unique.
+
+##### Branch 3: `fallback_hash`
+
+Use `fallback_hash` only when `starts_at_utc` is known and a concrete venue identity exists so `venue_key` can be derived. The `fallback_hash` branch is not available without a concrete venue identity.
+
+Format: `event:v1:{source_name}:hash:{sha256_hex}`
+
+Derivation for `fallback_hash` is:
+
+1. Build a structured payload containing exactly:
+   - `source_name`
+   - `normalized_title`
+   - `starts_at_utc`
+   - `venue_key`
+   - `normalization_version`
+2. Serialize that payload as UTF-8 JSON using:
+   - object keys sorted lexicographically
+   - minified JSON with no whitespace after commas or colons
+   - `ensure_ascii = false`
+   - standard JSON escaping only; `/` is not escaped
+3. Hash the resulting bytes with SHA-256.
+4. Encode the digest as lowercase hexadecimal.
+
+Branch `fallback_hash` is best-effort only. Title changes, venue changes, or normalization-rule changes can churn identity.
+
+In branches `source_event_id_starts_at` and `fallback_hash`, a corrected or rescheduled `starts_at_utc` intentionally produces a new `event_key`.
+
+`source_url` is provenance/display only. If an adapter can extract a stable identifier from a URL, it should pass that value as `occurrence_id` or `source_event_id` rather than relying on domain URL-based identity.
+
+Branches `source_event_id_starts_at` and `fallback_hash` require `starts_at_utc`. If scheduled time is unknown, do not emit a T2 `Event`. T2 represents scheduled performances only; TBA/unscheduled items belong in a different pre-T2 bucket/model.
 
 ### Timezone Handling Rules
 
@@ -205,10 +284,11 @@ Recommended venue preference values for future work:
 
 ```mermaid
 flowchart LR
-    A[Source Parsers] --> B[Normalized Event Domain]
-    B --> C[Storage Layer]
-    B --> D[Web View Models]
-    E[User Preference State] --> D
+    A[Source Parsers and Adapters] --> B[Candidate Event Inputs]
+    B --> C[Canonical Event Domain]
+    C --> D[Storage Layer]
+    C --> E[Web View Models]
+    F[User Preference State] --> E
 ```
 
 ### Domain Object Diagram
@@ -217,6 +297,8 @@ flowchart LR
 classDiagram
     class Event {
         +event_key
+        +identity_kind
+        +identity_inputs
         +title
         +category
         +venue
@@ -294,6 +376,7 @@ classDiagram
 6. Display labels and stable identifiers should both exist where future ambiguity is likely, especially for events, venues, and locations.
 7. `event_key` is a stable source-scoped identifier, not a cross-source deduplication key.
 8. `event_key` must resolve to one concrete performance, not to a series container or a source page that aggregates many performances.
+9. `source_url` is provenance only and must not be used by the domain as an identity branch.
 
 ## Implementation Plan
 
@@ -319,7 +402,7 @@ classDiagram
 | Category tests | Verify the defined taxonomy and V0 category set |
 | Week-window tests | Verify Monday-to-Monday current-week boundaries in `America/New_York`, including exactly Monday `00:00`, exactly next Monday `00:00`, and timezone conversion across a local-day boundary |
 | Inclusion-rule tests | Verify in-scope vs out-of-scope behavior for week and category decisions |
-| Key-derivation tests | Verify deterministic key generation and precedence rules |
+| Key-derivation tests | Verify deterministic key generation, identity kinds, identity inputs, precedence rules, fixed canonical-serialization/SHA-256 vectors, and percent-encoding of non-ASCII titles and opaque source-native IDs |
 | Performance granularity tests | Verify that multi-showtime and recurring source data map to one `Event` per concrete start time |
 | Preference model tests | Verify the minimal user-feedback and venue-preference domain contracts if implemented in T2 |
 
@@ -331,7 +414,7 @@ classDiagram
 | Parsing raw HTML or JSON-LD | Covered in T3 |
 | Database schema and repository behavior | Covered in T4 |
 | UI rendering concerns | Covered in T5 |
-| Deduplication logic | More appropriate once storage exists |
+| Cross-source deduplication and reconciliation logic | More appropriate once storage exists; within-source upsert by `event_key` is a storage concern, not a T2 domain concern |
 | Category inference from heterogeneous sources | More appropriate once source parsing exists |
 | Recommender scoring or ranking logic | Belongs in a later task after user feedback exists |
 | Full implementation of `UserEventFeedback` and `UserVenuePreference` | Deferred to a later task |
@@ -348,6 +431,7 @@ Task 2 is complete when:
 - stable identifiers for events, venues, and locations are defined and tested
 - stable key derivation rules are documented and tested
 - `event_key` derivation is explicitly performance-scoped and safe for multiple showtimes on one source page
+- URL-based identity has been removed from the domain contract
 - organizer is modeled separately from venue and source
 - future personalization models are documented but not implemented
 - the resulting domain contract is small, explicit, and suitable for T3, T4, and T5
