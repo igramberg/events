@@ -17,8 +17,8 @@ Each task should have its own design discussion, written implementation plan, te
 | Task | Title | Status | Depends On |
 | --- | --- | --- | --- |
 | T1 | Repo bootstrap and program design | Complete | None |
-| T2 | Core event model and inclusion rules | Not started | T1 |
-| T3 | Source adapter framework and generic parser | Not started | T2 |
+| T2 | Core event model and inclusion rules | Complete | T1 |
+| T3 | Source adapter framework and generic parser | In progress | T2 |
 | T4 | Storage layer for current-week events | Not started | T2 |
 | T5 | Web UI shell and weekly list page | Not started | T2, T4 |
 | T6 | V0 source pack for music and theater | Not started | T3, T4, T5 |
@@ -68,11 +68,11 @@ Each task should be worked in this format:
 | Field | Detail |
 | --- | --- |
 | Objective | Create the source adapter contract and a generic structured-data parser |
-| Scope | Adapter interface, fetch/parse pipeline shape, generic JSON-LD extraction, normalized parse output |
+| Scope | Adapter interface, fetch/parse pipeline shape, generic JSON-LD extraction, candidate event input output |
 | Design Questions | Adapter abstraction, parse result format, fetch responsibilities, failure reporting shape |
-| Implementation Plan | Define interfaces, write parser tests first, implement generic extraction, keep source-specific logic out of scope |
-| Test Plan | Parsing tests for JSON-LD and structured event payloads, adapter contract tests |
-| Exit Criteria | The app can parse machine-readable event data from a source page into normalized domain events |
+| Implementation Plan | See [t3-source-framework.md](./t3-source-framework.md), then define interfaces, write parser tests first, implement generic extraction, keep source-specific logic out of scope |
+| Test Plan | Parsing tests for JSON-LD fixtures and adapter contract tests |
+| Exit Criteria | The app can parse machine-readable event data from a source page into candidate event inputs plus issues |
 
 ### T4. Storage Layer for Current-Week Events
 
