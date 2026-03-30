@@ -2,34 +2,34 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import UTC
-from datetime import datetime
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Sequence
 
-from sqlalchemy import JSON
-from sqlalchemy import Column
-from sqlalchemy import Index
-from sqlalchemy import MetaData
-from sqlalchemy import String
-from sqlalchemy import Table
-from sqlalchemy import create_engine
-from sqlalchemy import delete
-from sqlalchemy import select
-from sqlalchemy.engine import Engine
-from sqlalchemy.sql import and_
-from sqlalchemy.sql import or_
+from sqlalchemy import (
+    JSON,
+    Column,
+    Index,
+    MetaData,
+    String,
+    Table,
+    create_engine,
+    delete,
+    select,
+)
 from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy.engine import Engine
+from sqlalchemy.sql import and_, or_
 
 from events.domain import WeekWindow
-from events.domain.models import Event
-from events.domain.models import EventCategory
-from events.domain.models import IdentityKind
-from events.domain.models import Location
-from events.domain.models import Organizer
-from events.domain.models import Venue
+from events.domain.models import (
+    Event,
+    EventCategory,
+    IdentityKind,
+    Location,
+    Organizer,
+    Venue,
+)
 from events.storage.repository import StorageRepository
-
 
 metadata = MetaData()
 
@@ -55,12 +55,16 @@ current_week_events = Table(
     Column("source_name", String, nullable=False),
     Column("source_event_id", String, nullable=True),
     Column("description", String, nullable=True),
-    Column("performers", JSON, nullable=False, default=list, server_default="[]"),
+    Column(
+        "performers", JSON, nullable=False, default=list, server_default="[]"
+    ),
     Column("tags", JSON, nullable=False, default=list, server_default="[]"),
     Column("last_seen_at", String, nullable=False),
 )
 Index("idx_current_week_events_starts_at", current_week_events.c.starts_at)
-Index("idx_current_week_events_last_seen_at", current_week_events.c.last_seen_at)
+Index(
+    "idx_current_week_events_last_seen_at", current_week_events.c.last_seen_at
+)
 
 
 def create_tables(engine: Engine) -> None:
@@ -112,7 +116,12 @@ def utc_bounds_for_window(window: WeekWindow) -> tuple[str, str]:
 
 
 def _serialize_identity_inputs(identity_inputs: dict[str, str]) -> str:
-    return json.dumps(identity_inputs, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return json.dumps(
+        identity_inputs,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
 
 
 def _serialize_sequence(values: Sequence[str]) -> list[str]:
@@ -133,7 +142,9 @@ def _row_to_event(row) -> Event:
     )
     organizer = None
     if row.organizer_key and row.organizer_name:
-        organizer = Organizer(organizer_key=row.organizer_key, name=row.organizer_name)
+        organizer = Organizer(
+            organizer_key=row.organizer_key, name=row.organizer_name
+        )
 
     return Event(
         event_key=row.event_key,
@@ -157,12 +168,16 @@ def _row_to_event(row) -> Event:
 class SqliteStorageRepository(StorageRepository):
     engine: Engine
 
-    def upsert_events(self, events: Sequence[Event], refresh_timestamp: datetime) -> None:
+    def upsert_events(
+        self, events: Sequence[Event], refresh_timestamp: datetime
+    ) -> None:
         refresh_ts_str = serialize_refresh_timestamp(refresh_timestamp)
         with self.engine.begin() as conn:
             for event in events:
                 starts_at_str = serialize_starts_at(event.starts_at)
-                identity_inputs_serialized = _serialize_identity_inputs(dict(event.identity_inputs))
+                identity_inputs_serialized = _serialize_identity_inputs(
+                    dict(event.identity_inputs)
+                )
 
                 existing = conn.execute(
                     select(
@@ -173,9 +188,12 @@ class SqliteStorageRepository(StorageRepository):
                 if existing:
                     if (
                         existing.identity_kind != event.identity_kind
-                        or existing.identity_inputs != identity_inputs_serialized
+                        or existing.identity_inputs
+                        != identity_inputs_serialized
                     ):
-                        raise ValueError("identity material mismatch for event_key")
+                        raise ValueError(
+                            "identity material mismatch for event_key"
+                        )
 
                 stmt = insert(current_week_events).values(
                     event_key=event.event_key,
@@ -189,8 +207,12 @@ class SqliteStorageRepository(StorageRepository):
                     city=event.venue.location.city,
                     region=event.venue.location.region,
                     country_code=event.venue.location.country_code,
-                    organizer_key=event.organizer.organizer_key if event.organizer else None,
-                    organizer_name=event.organizer.name if event.organizer else None,
+                    organizer_key=event.organizer.organizer_key
+                    if event.organizer
+                    else None,
+                    organizer_name=event.organizer.name
+                    if event.organizer
+                    else None,
                     starts_at=starts_at_str,
                     source_url=event.source_url,
                     source_name=event.source_name,
@@ -210,8 +232,12 @@ class SqliteStorageRepository(StorageRepository):
                     city=event.venue.location.city,
                     region=event.venue.location.region,
                     country_code=event.venue.location.country_code,
-                    organizer_key=event.organizer.organizer_key if event.organizer else None,
-                    organizer_name=event.organizer.name if event.organizer else None,
+                    organizer_key=event.organizer.organizer_key
+                    if event.organizer
+                    else None,
+                    organizer_name=event.organizer.name
+                    if event.organizer
+                    else None,
                     starts_at=starts_at_str,
                     source_url=event.source_url,
                     source_name=event.source_name,
@@ -247,7 +273,9 @@ class SqliteStorageRepository(StorageRepository):
             ).fetchall()
         return [_row_to_event(row) for row in rows]
 
-    def prune_stale_events(self, window: WeekWindow, refresh_timestamp: datetime) -> None:
+    def prune_stale_events(
+        self, window: WeekWindow, refresh_timestamp: datetime
+    ) -> None:
         start_utc, end_utc = utc_bounds_for_window(window)
         refresh_ts_str = serialize_refresh_timestamp(refresh_timestamp)
         with self.engine.begin() as conn:
@@ -262,7 +290,9 @@ class SqliteStorageRepository(StorageRepository):
             )
 
 
-def build_sqlite_repository(database_url: str = "sqlite+pysqlite:///:memory:") -> SqliteStorageRepository:
+def build_sqlite_repository(
+    database_url: str = "sqlite+pysqlite:///:memory:",
+) -> SqliteStorageRepository:
     engine = create_engine(database_url, future=True)
     create_tables(engine)
     return SqliteStorageRepository(engine=engine)

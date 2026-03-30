@@ -1,17 +1,15 @@
-from datetime import date
-from datetime import datetime
-from zoneinfo import ZoneInfo
 import unittest
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from events.domain.keys import derive_event_identity
-from events.domain.models import Event
-from events.domain.models import EventCategory
-from events.domain.models import Location
-from events.domain.models import Venue
-from events.domain.weeks import WeekWindow
-from events.domain.weeks import event_in_week_window
-from events.domain.weeks import is_event_in_scope
-from events.domain.weeks import week_window_for
+from events.domain.models import Event, EventCategory, Location, Venue
+from events.domain.weeks import (
+    WeekWindow,
+    event_in_week_window,
+    is_event_in_scope,
+    week_window_for,
+)
 
 
 def build_event(*, category: EventCategory, starts_at: datetime) -> Event:
@@ -79,20 +77,39 @@ class WeekWindowTests(unittest.TestCase):
         )
         self.assertEqual(
             167 * 60 * 60,
-            int((window.end.astimezone(ZoneInfo("UTC")) - window.start.astimezone(ZoneInfo("UTC"))).total_seconds()),
+            int(
+                (
+                    window.end.astimezone(ZoneInfo("UTC"))
+                    - window.start.astimezone(ZoneInfo("UTC"))
+                ).total_seconds()
+            ),
         )
 
-    def test_monday_midnight_is_included_and_next_monday_midnight_is_excluded(self) -> None:
+    def test_monday_midnight_is_included_and_next_monday_midnight_is_excluded(
+        self,
+    ) -> None:
         window = WeekWindow(
-            start=datetime(2026, 3, 23, 0, 0, 0, tzinfo=ZoneInfo("America/New_York")),
-            end=datetime(2026, 3, 30, 0, 0, 0, tzinfo=ZoneInfo("America/New_York")),
+            start=datetime(
+                2026, 3, 23, 0, 0, 0, tzinfo=ZoneInfo("America/New_York")
+            ),
+            end=datetime(
+                2026, 3, 30, 0, 0, 0, tzinfo=ZoneInfo("America/New_York")
+            ),
         )
 
         self.assertTrue(
             event_in_week_window(
                 build_event(
                     category=EventCategory.CONCERT,
-                    starts_at=datetime(2026, 3, 23, 0, 0, 0, tzinfo=ZoneInfo("America/New_York")),
+                    starts_at=datetime(
+                        2026,
+                        3,
+                        23,
+                        0,
+                        0,
+                        0,
+                        tzinfo=ZoneInfo("America/New_York"),
+                    ),
                 ),
                 window,
             ),
@@ -101,7 +118,15 @@ class WeekWindowTests(unittest.TestCase):
             event_in_week_window(
                 build_event(
                     category=EventCategory.CONCERT,
-                    starts_at=datetime(2026, 3, 30, 0, 0, 0, tzinfo=ZoneInfo("America/New_York")),
+                    starts_at=datetime(
+                        2026,
+                        3,
+                        30,
+                        0,
+                        0,
+                        0,
+                        tzinfo=ZoneInfo("America/New_York"),
+                    ),
                 ),
                 window,
             ),
@@ -109,8 +134,12 @@ class WeekWindowTests(unittest.TestCase):
 
     def test_tz_aware_start_can_cross_local_day_boundary(self) -> None:
         window = WeekWindow(
-            start=datetime(2026, 3, 23, 0, 0, 0, tzinfo=ZoneInfo("America/New_York")),
-            end=datetime(2026, 3, 30, 0, 0, 0, tzinfo=ZoneInfo("America/New_York")),
+            start=datetime(
+                2026, 3, 23, 0, 0, 0, tzinfo=ZoneInfo("America/New_York")
+            ),
+            end=datetime(
+                2026, 3, 30, 0, 0, 0, tzinfo=ZoneInfo("America/New_York")
+            ),
         )
         event = build_event(
             category=EventCategory.CONCERT,
@@ -119,11 +148,15 @@ class WeekWindowTests(unittest.TestCase):
 
         self.assertFalse(event_in_week_window(event, window))
 
-    def test_events_earlier_than_now_but_same_week_remain_in_scope(self) -> None:
+    def test_events_earlier_than_now_but_same_week_remain_in_scope(
+        self,
+    ) -> None:
         window = week_window_for(date(2026, 3, 28))
         event = build_event(
             category=EventCategory.THEATER,
-            starts_at=datetime(2026, 3, 24, 20, 0, 0, tzinfo=ZoneInfo("America/New_York")),
+            starts_at=datetime(
+                2026, 3, 24, 20, 0, 0, tzinfo=ZoneInfo("America/New_York")
+            ),
         )
 
         self.assertTrue(is_event_in_scope(event, window))
@@ -132,7 +165,9 @@ class WeekWindowTests(unittest.TestCase):
         window = week_window_for(date(2026, 3, 28))
         event = build_event(
             category=EventCategory.EXHIBITION,
-            starts_at=datetime(2026, 3, 24, 20, 0, 0, tzinfo=ZoneInfo("America/New_York")),
+            starts_at=datetime(
+                2026, 3, 24, 20, 0, 0, tzinfo=ZoneInfo("America/New_York")
+            ),
         )
 
         self.assertFalse(is_event_in_scope(event, window))
@@ -141,10 +176,14 @@ class WeekWindowTests(unittest.TestCase):
         window = week_window_for(date(2026, 3, 28))
         event = build_event(
             category=EventCategory.CONCERT,
-            starts_at=datetime(2026, 3, 24, 20, 0, 0, tzinfo=ZoneInfo("America/New_York")),
+            starts_at=datetime(
+                2026, 3, 24, 20, 0, 0, tzinfo=ZoneInfo("America/New_York")
+            ),
         )
 
-        self.assertFalse(is_event_in_scope(event, window, allowed_categories=set()))
+        self.assertFalse(
+            is_event_in_scope(event, window, allowed_categories=set())
+        )
 
 
 if __name__ == "__main__":

@@ -42,3 +42,19 @@ Task execution is intentionally phased:
 7. Manual refresh
 8. Scheduler
 
+### Tooling
+
+- Package manager: `uv` (lockfile committed as `uv.lock`)
+- Lint/format: `ruff` (80-column line length)
+
+```bash
+# Setup (creates .venv/)
+uv sync --extra dev
+
+# Tests
+uv run pytest
+
+# Lint + format
+uv run ruff check . --fix
+uv run ruff format .
+```

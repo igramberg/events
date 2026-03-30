@@ -1,15 +1,16 @@
+import unittest
 from datetime import datetime
 from zoneinfo import ZoneInfo
-import unittest
 
-from events.domain import WeekWindow
-from events.domain import week_window_for
-from events.domain.models import Event
-from events.domain.models import EventCategory
-from events.domain.models import IdentityKind
-from events.domain.models import Location
-from events.domain.models import Organizer
-from events.domain.models import Venue
+from events.domain import WeekWindow, week_window_for
+from events.domain.models import (
+    Event,
+    EventCategory,
+    IdentityKind,
+    Location,
+    Organizer,
+    Venue,
+)
 
 
 class DomainModelTests(unittest.TestCase):
@@ -44,7 +45,10 @@ class DomainModelTests(unittest.TestCase):
                 venue=venue,
                 organizer=None,
                 identity_kind=IdentityKind.OCCURRENCE_ID,
-                identity_inputs={"source_name": "roadrunner", "occurrence_id": "123"},
+                identity_inputs={
+                    "source_name": "roadrunner",
+                    "occurrence_id": "123",
+                },
                 starts_at=datetime(2026, 3, 28, 20, 0, 0),
                 source_url="https://example.com/show",
                 source_event_id=None,
@@ -75,7 +79,10 @@ class DomainModelTests(unittest.TestCase):
             venue=venue,
             organizer=organizer,
             identity_kind=IdentityKind.OCCURRENCE_ID,
-            identity_inputs={"source_name": "roadrunner", "occurrence_id": "123"},
+            identity_inputs={
+                "source_name": "roadrunner",
+                "occurrence_id": "123",
+            },
             starts_at=datetime(2026, 3, 28, 20, 0, 0, tzinfo=ZoneInfo("UTC")),
             source_url="https://example.com/show",
             source_event_id="123",
@@ -111,8 +118,13 @@ class DomainModelTests(unittest.TestCase):
                 venue=venue,
                 organizer=None,
                 identity_kind=IdentityKind.OCCURRENCE_ID,
-                identity_inputs={"source_name": "roadrunner:boston", "occurrence_id": "123"},
-                starts_at=datetime(2026, 3, 28, 20, 0, 0, tzinfo=ZoneInfo("UTC")),
+                identity_inputs={
+                    "source_name": "roadrunner:boston",
+                    "occurrence_id": "123",
+                },
+                starts_at=datetime(
+                    2026, 3, 28, 20, 0, 0, tzinfo=ZoneInfo("UTC")
+                ),
                 source_url="https://example.com/show",
                 source_event_id="123",
                 source_name="roadrunner:boston",
@@ -140,7 +152,9 @@ class DomainModelTests(unittest.TestCase):
                 organizer=None,
                 identity_kind=IdentityKind.OCCURRENCE_ID,
                 identity_inputs={},
-                starts_at=datetime(2026, 3, 28, 20, 0, 0, tzinfo=ZoneInfo("UTC")),
+                starts_at=datetime(
+                    2026, 3, 28, 20, 0, 0, tzinfo=ZoneInfo("UTC")
+                ),
                 source_url="",
                 source_event_id=None,
                 source_name="roadrunner",
@@ -168,13 +182,17 @@ class DomainModelTests(unittest.TestCase):
                 organizer=None,
                 identity_kind=IdentityKind.OCCURRENCE_ID,
                 identity_inputs={},
-                starts_at=datetime(2026, 3, 28, 20, 0, 0, tzinfo=ZoneInfo("UTC")),
+                starts_at=datetime(
+                    2026, 3, 28, 20, 0, 0, tzinfo=ZoneInfo("UTC")
+                ),
                 source_url="https://example.com/show",
                 source_event_id=None,
                 source_name="roadrunner",
             )
 
-    def test_event_rejects_identity_inputs_with_mismatched_source_name(self) -> None:
+    def test_event_rejects_identity_inputs_with_mismatched_source_name(
+        self,
+    ) -> None:
         location = Location(
             location_key="loc:v1:us:ma:boston",
             city="Boston",
@@ -195,8 +213,13 @@ class DomainModelTests(unittest.TestCase):
                 venue=venue,
                 organizer=None,
                 identity_kind=IdentityKind.OCCURRENCE_ID,
-                identity_inputs={"source_name": "other_source", "occurrence_id": "123"},
-                starts_at=datetime(2026, 3, 28, 20, 0, 0, tzinfo=ZoneInfo("UTC")),
+                identity_inputs={
+                    "source_name": "other_source",
+                    "occurrence_id": "123",
+                },
+                starts_at=datetime(
+                    2026, 3, 28, 20, 0, 0, tzinfo=ZoneInfo("UTC")
+                ),
                 source_url="https://example.com/show",
                 source_event_id=None,
                 source_name="roadrunner",
@@ -228,7 +251,9 @@ class DomainModelTests(unittest.TestCase):
                     "source_event_id": "HAMILTON/Evening",
                     "starts_at_utc": "2026-03-28T21:00:00Z",
                 },
-                starts_at=datetime(2026, 3, 28, 20, 0, 0, tzinfo=ZoneInfo("UTC")),
+                starts_at=datetime(
+                    2026, 3, 28, 20, 0, 0, tzinfo=ZoneInfo("UTC")
+                ),
                 source_url="https://example.com/show",
                 source_event_id="HAMILTON/Evening",
                 source_name="boch_center",
@@ -255,14 +280,21 @@ class DomainModelTests(unittest.TestCase):
                 venue=venue,
                 organizer=None,
                 identity_kind=IdentityKind.OCCURRENCE_ID,
-                identity_inputs={"source_name": "roadrunner", "occurrence_id": "123"},
-                starts_at=datetime(2026, 3, 28, 20, 0, 0, tzinfo=ZoneInfo("UTC")),
+                identity_inputs={
+                    "source_name": "roadrunner",
+                    "occurrence_id": "123",
+                },
+                starts_at=datetime(
+                    2026, 3, 28, 20, 0, 0, tzinfo=ZoneInfo("UTC")
+                ),
                 source_url="/relative/path",
                 source_event_id=None,
                 source_name="roadrunner",
             )
 
-    def test_location_venue_and_organizer_reject_empty_required_strings(self) -> None:
+    def test_location_venue_and_organizer_reject_empty_required_strings(
+        self,
+    ) -> None:
         with self.assertRaises(ValueError):
             Location(
                 location_key="",
@@ -291,7 +323,9 @@ class DomainModelTests(unittest.TestCase):
                 name="",
             )
 
-    def test_location_venue_and_organizer_reject_mismatched_canonical_keys(self) -> None:
+    def test_location_venue_and_organizer_reject_mismatched_canonical_keys(
+        self,
+    ) -> None:
         location = Location(
             location_key="loc:v1:us:ma:boston",
             city="Boston",
