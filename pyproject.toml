@@ -7,18 +7,18 @@ name = "events"
 version = "0.1.0"
 description = "Greater Boston weekly events aggregator"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 dependencies = [
-  "fastapi>=0.116,<1.0",
-  "jinja2>=3.1,<4.0",
-  "uvicorn>=0.35,<1.0",
-  "sqlalchemy>=2.0,<3.0",
+  "fastapi>=0.135.2,<1.0",
+  "jinja2>=3.1.6,<4.0",
+  "uvicorn>=0.42.0,<1.0",
+  "sqlalchemy>=2.0.48,<3.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "pytest>=8.4,<9.0",
-  "ruff>=0.4,<1.0",
+  "pytest>=9.0.2,<10.0",
+  "ruff>=0.15.8,<1.0",
 ]
 
 [tool.setuptools]
@@ -32,7 +32,7 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 80
-target-version = "py311"
+target-version = "py314"
 src = ["src", "tests"]
 
 [tool.ruff.lint]
