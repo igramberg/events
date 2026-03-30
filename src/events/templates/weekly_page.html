@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Weekly Events</title>
+  </head>
+  <body>
+    <header>
+      <h1>Weekly Events</h1>
+      <p>{{ page.week_label }}</p>
+    </header>
+
+    <section aria-label="Refresh status">
+      <p>{{ page.refresh_status.message }}</p>
+    </section>
+
+    <section aria-label="Weekly summary">
+      <p>{{ page.total_events }} event{% if page.total_events != 1 %}s{% endif %} this week</p>
+    </section>
+
+    {% if page.has_events %}
+    {% for day in page.day_sections %}
+    <section aria-labelledby="day-{{ day.day_key }}">
+      <h2 id="day-{{ day.day_key }}">{{ day.day_label }}</h2>
+      <ul>
+        {% for item in day.items %}
+        <li>
+          <article data-event-key="{{ item.event_key }}">
+            <h3>
+              <a href="{{ item.source_url }}">{{ item.title }}</a>
+            </h3>
+            <p>{{ item.category_label }}</p>
+            <p>
+              <time datetime="{{ item.starts_at_iso }}">
+                {{ item.starts_at_label }}
+              </time>
+            </p>
+            <p>{{ item.venue_name }}</p>
+            <p>{{ item.location_label }}</p>
+            {% if item.organizer_name %}
+            <p>{{ item.organizer_name }}</p>
+            {% endif %}
+            {% if item.description %}
+            <p class="event-description">{{ item.description }}</p>
+            {% endif %}
+          </article>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endfor %}
+    {% else %}
+    <section aria-label="Empty state">
+      <h2>No events stored for this week</h2>
+      <p>Source refresh is not wired into the UI yet.</p>
+    </section>
+    {% endif %}
+  </body>
+</html>

@@ -57,4 +57,15 @@ uv run pytest
 # Lint + format
 uv run ruff check . --fix
 uv run ruff format .
+
+# Run the web UI
+uv run uvicorn events.main:app --reload
+
+# Default SQLite location:
+# macOS: ~/Library/Application Support/events/events.db
+# Linux: ~/.local/state/events/events.db
+# Windows: %APPDATA%/events/events.db
+#
+# Optional: override the default SQLite location
+EVENTS_DATABASE_URL=sqlite+pysqlite:////tmp/events.db uv run uvicorn events.main:app --reload
 ```
