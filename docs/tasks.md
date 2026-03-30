@@ -18,9 +18,9 @@ Each task should have its own design discussion, written implementation plan, te
 | --- | --- | --- | --- |
 | T1 | Repo bootstrap and program design | Complete | None |
 | T2 | Core event model and inclusion rules | Complete | T1 |
-| T3 | Source adapter framework and generic parser | In progress | T2 |
-| T4 | Storage layer for current-week events | Not started | T2 |
-| T5 | Web UI shell and weekly list page | Not started | T2, T4 |
+| T3 | Source adapter framework and generic parser | Complete | T2 |
+| T4 | Storage layer for current-week events | Complete | T2 |
+| T5 | Web UI shell and weekly list page | In progress | T2, T4 |
 | T6 | V0 source pack for music and theater | Not started | T3, T4, T5 |
 | T7 | Manual refresh flow | Not started | T3, T4, T5, T6 |
 | T8 | Scheduler | Not started | T7 |
@@ -92,7 +92,7 @@ Each task should be worked in this format:
 | Objective | Provide the first usable local web page for browsing weekly events |
 | Scope | FastAPI route, template rendering, weekly list layout, category labels, refresh status placeholder |
 | Design Questions | Route shape, page layout, filter strategy for V0, what metadata to show initially |
-| Implementation Plan | Design page structure, write route/template tests, implement minimal HTML rendering |
+| Implementation Plan | See [t5-web-ui.md](./t5-web-ui.md), then write route/template tests first, implement the weekly page shell, and keep refresh actions out of scope |
 | Test Plan | Route response tests, rendered content tests, empty-state tests |
 | Exit Criteria | A user can open the local app and see a weekly events page |
 
